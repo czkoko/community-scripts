@@ -1,10 +1,16 @@
 //@api-1.0
-// v3.6
+// v4.0.1
 // Author: @czkoko
-// This workflow will require two models Flux Dev and Dev to Schnell 4-Step lora at the same time. 
-// Provide three different performance modes for users to choose from, optimized parameters, suitable for beginners.
-// You only need to fill in the prompts and select the Performance Mode and Image Size. 
-
+// Automatic workflow for Flux, including text - to - image, batch image refine, batch prompts, random prompt, etc.
+//
+// - This workflow will require two models Flux Dev(8 - bit) and Dev to Schnell lora at the same time. 
+//   When there are multiple Flux models with different precisions, the one with the highest precision is used first.
+//   The priority is: FLUX.1[dev](Exact) >> FLUX.1[dev] >> FLUX.1[dev](8 - bit).If it is not downloaded, FLUX.1[dev](8 - bit) is used first.
+// - Designed for the Flux model, but also supports the automatic setting of parameters for popular models. Like: DreamShaper Turbo, Kolors, SDXL, SD3, Schnell downloaded from the model list of Draw Things. 
+// - Provide three different performance modes for users to choose from, optimized parameters, suitable for beginners.
+// - The random prompt engine can automatically generate good prompts for you in batches, and can also customize them according to your preferences.
+// - A variety of workflows and modes can be switched to achieve different effects.
+//
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //
@@ -12,22 +18,6 @@
 //
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
-// Select the accuracy of the model. If you need a more accurate quantization model, please set this constant to `false`, and use Flux Dev (8-bit) by default.
-//
-const useFlux8bit = true;
-//
-// Enable Controls for other model.
-//
-const enableOtherMoldelControls = false;
-//
-// Enable LoRA for other model.
-//
-const enableOtherMoldelLoRA = false;
-//
-// After enabling, it will automatically set parameters for other supported models. After disabling, you need to set parameters manually, but you can use accelerate LoRA.
-//
-const enableOtherMoldePreset = true;
 //
 // You can customize unlimited styles you like here, and the custom style is disabled by default.
 //
@@ -40,8 +30,15 @@ const customStyle = [
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const version = "v3.6";
+const version = "v4.0.1";
 var promptsSource = pipeline.prompts.prompt;
+
+const themePreview = [
+  "data:image/png;base64,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",
+  "data:image/png;base64,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",
+  "data:image/png;base64,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",
+  "data:image/png;base64,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"
+];
 
 const stylePreview = [
   "data:image/png;base64,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",
@@ -66,15 +63,15 @@ const stylePreview = [
 ];
 
 const configuration = pipeline.configuration;
-let otherModelName = checkModel();
-if (checkModel()) {
-  if (otherModelName == "Flux") {
-    otherModelName = `🧩  Other Model (null)`;
+let customModelName = checkModel();
+if (checkModel() != "Custom") {
+  if (customModelName == "Flux") {
+    customModelName = `🧩  Custom Model `;
   } else {
-    otherModelName = `🧩  ${otherModelName} `;
+    customModelName = `🧩  ${customModelName} `;
   }
 } else {
-  otherModelName = `🧩  Unknown Model `;
+  customModelName = `⚠️  Unknown Model `;
 }
 
 const promptsSourceInput = requestFromUser(
@@ -84,9 +81,9 @@ const promptsSourceInput = requestFromUser(
     return [
       this.section(
         "❖  Workflow Mode",
-        " •   Flux Model: The optimization parameters will be set automatically for Flux.\n •   Other Model: Supports automatic parameter setting for DreamShaper Turbo,\n      Kolors, SDXL, SD3 downloaded from the model list of Draw Things.\n      (Accelerate LoRA is not supported)\n      If 'Unknown Model' is displayed, you need to set the parameters manually first.\n •   Image Refiner: Refine the existing image on the canvas or folder automatically.",
+        " •   Flux Model: The optimization parameters will be set automatically for Flux.\n •   Custom Model: Supports automatic parameter setting for DreamShaper Turbo,\n      Kolors, SDXL, SD3, Schnell downloaded from the model list of Draw Things.\n •   Image Refiner: Refine the existing image on the canvas or folder automatically.",
         [
-          this.segmented(0, ["🌊  Flux Model ", otherModelName, "✨  Image Refiner "]),
+          this.segmented(0, ["🌊  Flux Model ", customModelName, "✨  Image Refiner "]),
         ]
       ),
       this.section(
@@ -105,9 +102,9 @@ const promptsSourceInput = requestFromUser(
       ),
       this.section(
         "❖  Random Prompt • Creative Mode",
-        " •   🅿: Program Automatic Mode, Automatic combination of style, subject, action, clothes, etc., more whimsical images.\n •   🆂: Subject Priority Mode, Action is matched by the model according to the subject and scene, which is relatively monotonous, but more natural.\n •   🅰: Action Priority Mode, Subject is matched by the model according to the action and scene, which is more vivid and natural.\n •   🅼: Manual Mode, You can manually combine the parts of the prompt.",
+        " •   🅿: Program Automatic Mode, Automatic combination of style, subject, action, clothes, etc., more whimsical images.\n •   🆂: Subject Priority Mode, Action is matched by the model according to the subject and scene, which is relatively monotonous, but more natural.\n •   🅰: Action Priority Mode, Subject is matched by the model according to the action and scene, which is more vivid and natural.\n •   🅼: Manual Mode, You can manually combine the parts of the prompt through [Manual Options].",
         [
-          this.segmented(1, ["P", "S", "A", "M"]),
+          this.segmented(0, ["P", "S", "A", "M"]),
         ]
       ),
       this.section(
@@ -136,8 +133,15 @@ const promptsSourceInput = requestFromUser(
         ]
       ),
       this.section(
+        "❖  Random Prompt • Theme Filter        (🅿 / 🆂 / 🅰 / 🅼 Mode)",
+        " •   Choose the theme you want from the theme preview, default is random.",
+        [
+          this.image(themePreview, null, true)
+        ]
+      ),
+      this.section(
         "❖  Random Prompt • Style Filter           (🅿 / 🆂 / 🅰 / 🅼 Mode)",
-        " •   Filter the styles you don't need.\n •   If you want to only use one style, choose directly from the style preview.\n •   The custom style can be set at the beginning of the source code.",
+        " •   Choose the style you want from the style preview, default is random.\n •   After selecting the random icon, you can select multiple styles below\n      to choose randomly.\n •   The custom style can be set at the beginning of the source code.",
         [
           this.image(stylePreview, null, true),
           this.switch(true, "✡︎   Hasselblad Master Photography"),
@@ -160,12 +164,17 @@ const promptsSourceInput = requestFromUser(
           this.switch(false, "✡︎   Vibrant Anime"),
           this.switch(false, "✡︎   Custom")
         ]
+      ),
+      this.section(
+        "❖  Help and Feedback",
+        " •   You can get help, submit feedback and check the update log in Draw Thing Discord:\n      Sharing >> Scripts >> Flux Auto Workflow.",
+        []
       )
     ];
   }
 );
 
-if (promptsSourceInput[0][0] == 1 && checkModel() == "Flux") {
+if (promptsSourceInput[0][0] == 1 && configuration.model.includes("flux_1_dev")) {
   requestFromUser(
     `Flux Auto Workflow ${version}`,
     "Exit",
@@ -177,7 +186,7 @@ if (promptsSourceInput[0][0] == 1 && checkModel() == "Flux") {
           []
         ),
         this.section(
-          "Please exit and reselect other non-Flux models.",
+          "Please select flux workflow or exit and reselect other non-Flux models.",
           "",
           []
         ),
@@ -197,22 +206,22 @@ const angle = [
 ];
 
 const style = [
-  "Hyper-realistic photography, captured with Hasselblad XCD, masterpieces of photography, sharp and intricate details, life-like textures, high-resolution clarity, and true-to-life colors",//Hasselblad Master Photography
-  "Bright, white-dominant images with soft shadows and very subtle details. The focus is on high key lighting with minimal color, often in grayscale or with just a hint of pastel shades",//Soft High-Key Photography
-  "Hyper-realistic photography, Bold lighting, sharp contrasts, and dramatic poses. Emphasizes luxury and glamour with sleek, polished visuals. Perfect for runway or fashion magazine aesthetics",//High-Fashion Portrait
-  "Rich, vibrant colors with a slight warmth, with slightly saturated tones of red, yellow, and green. Subtle film grain adds texture. Captures the essence of classic Kodak color film",//Kodak Film Aesthetic
-  "A vibrant cinematic palette with strong orange and teal tones. Fine film grain and gaussian noise add texture",//Orange-Teal Cinematic
+  "Hyper-realistic photography, captured with Hasselblad XCD, masterpieces of photography, life-like textures, high-resolution clarity, and true-to-life colors",//Hasselblad Master Photography
+  "Bright, white-dominant images with soft shadows and very subtle details. The focus is on high key lighting with minimal color, with just a hint of pastel shades",//Soft High-Key Photography
+  "Hyper-realistic photography, Bold lighting, sharp contrasts, and dramatic poses. Emphasizes luxury and glamour with sleek, polished visuals. Perfect for fashion magazine aesthetics",//High-Fashion Portrait
+  "Rich, vibrant colors with a slight warmth, with slightly saturated tones of red, yellow, and green. classic Kodak color film",//Kodak Film Aesthetic
+  "A vibrant cinematic palette with strong orange and teal tones. Fine film grain and gaussian noise",//Orange-Teal Cinematic
   "Desaturated color palette with slight orange and blue undertones, shadow is very light. Fine film grain and gaussian noise to give a gritty, atmospheric quality",//Desaturated Cinematic
-  "Grainy, low-saturation film aesthetics with soft textures and muted colors, evoking the look of old films. Faded tones and nostalgic, retro atmospheres, Fine film grain and gaussian noise add texture",//Vintage Cinematic
-  "Symmetrical compositions with pastel and muted tones, often featuring warm yellows, soft pinks, and teal blues. Strong focus on meticulous framing, quirky characters, and vintage aesthetics. The style evokes a whimsical, nostalgic feel",//Retro Aesthetic Cinematic
-  "Desaturated, cold color palette dominated by greys, muted blues, and browns. Minimal contrast, with a focus on bleak, overcast lighting and a sense of emptiness. Ideal for dark, minimalist fashion themes with a gritty edge",//Cold Fashion
+  "Grainy, low-saturation film aesthetics with soft textures and muted colors, evoking the look of old films. Faded tones and nostalgic. Fine film grain and gaussian noise",//Vintage Cinematic
+  "Symmetrical compositions with pastel and muted tones, featuring warm yellows, soft pinks, and teal blues. Strong focus on meticulous framing and vintage aesthetics. Fine film grain and gaussian noise",//Retro Aesthetic Cinematic
+  "Desaturated, cold color palette dominated by greys, muted blues, and browns. Minimal contrast, with a focus on bleak, overcast lighting and a sense of emptiness",//Cold Fashion
   "A cool-toned, industrial palette dominated by metallic grays, blues, and muted whites. Sharp details and reflections give a sleek, futuristic appearance with a subtle, polished sheen",//Cold Steel Futurism
-  "Deep reds, blacks, and purples, with an emphasis on dramatic shadows. The style creates a mysterious, romantic atmosphere, with a rich, almost baroque aesthetic",//Dark Gothic Romance
+  "Hyper-realistic photography, Deep reds, blacks, and purples, with an emphasis on dramatic shadows. The style creates a mysterious, romantic atmosphere, with a rich, almost baroque aesthetic",//Dark Gothic Romance
   "Dark, atmospheric visuals characterized by deep blues, vibrant oranges. Fine film grain and gaussian noise add texture. Cinematic compositions with a focus on shadows and reflections",//Futuristic Noir Aesthetic
   "Hyper-realistic photography, rich and warm colors with deep reds, golds, and dark shadows. Heavy textures, intricate details, and ornate patterns evoke the luxury and grandeur of baroque art",//Opulent Baroque
   "Soft pastel colors (pinks, light blues, lavender) blended with smooth gradients. Dreamy and surreal, often with a misty or glowing effect. Minimal contrast, focusing on soft, harmonious tones",//Pastel Dreamscape
   "Minimalist conceptual illustration, flat design with bold shapes, vibrant colors, and clean lines. Perfect for fashion ads, offering a trendy, modern look",//Conceptual Illustration
-  "Ethereal 3D fantasy artwork with a vibrant color palette. Dreamy, whimsical worlds featuring purples, blues, and golds. Mystical elements evoke a magical, otherworldly atmosphere",//Mystical Fantasy
+  "Ethereal 3D fantasy artwork with a vibrant color palette. Dreamy, whimsical worlds featuring purples, blues, and golds. Mystical elements evoke a magical atmosphere",//Mystical Fantasy
   "Bright, vibrant 3D cartoon artwork with a Pixar-inspired style. High attention to realistic details, smooth textures, and expressive characters",//Pixar Cartoon Universe
   "Dynamic anime art style with vibrant, saturated colors, detailed character designs, bold outlines, and lively, expressive scenes. A balance of stylization and realism"//Vibrant Anime
 ];
@@ -229,24 +238,24 @@ const light = [
   "Dramatic spotlight cutting through darkness",
   "Neon light",
   "Dim light",
-  "Soft, diffused light",
+  "Soft and diffused light",
   "Cinematic lighting",
   "Warm light",
-  "Cool, bluish light",
-  "Gentle, soft glow",
-  "Sharp, focused beam of light",
+  "Cool and bluish light",
+  "Gentle and soft glow",
+  "Sharp and focused beam of light",
   "Pulsing light",
-  "Bright, glaring light",
-  "Soft, ambient light",
-  "Shimmering, scattered light",
-  "Muted, low light",
+  "Bright and glaring light",
+  "Soft and ambient light",
+  "Shimmering and scattered light",
+  "Muted and low light",
   "natural light",
-  "Bright, radiant light",
-  "Dappled, broken light",
-  "Hazy, diffused glow",
+  "Bright and radiant light",
+  "Dappled and broken light",
+  "Hazy and diffused glow",
   "contrasting light",
-  "Faint, barely-there light",
-  "Glowing, ethereal light",
+  "Faint and barely-there light",
+  "Glowing and ethereal light",
   "subtle light"
 ];
 
@@ -262,6 +271,21 @@ const male = [
   "A teen boy with long, shaggy hair and acne on his cheeks",
   "A young man with short, buzzed hair and a sharp jawline",
   "A young man with a man-bun and a thin mustache",
+  "A young man with a trendy undercut and tousled, light brown hair and bright blue eyes",
+  "A man in his mid-20s with vibrant purple hair styled in a messy quiff and a defined jawline",
+  "A fashionable young man with shoulder-length curly hair and a confident smile, exuding a laid-back vibe",
+  "A man in his early 30s with a sleek pompadour and perfectly shaped eyebrows, showcasing a charming demeanor",
+  "A young man with buzzed sides and a top knot, featuring striking green eyes and a fresh, youthful complexion",
+  "A man in his 20s with shoulder-length straight hair and a warm smile, framed by soft facial features",
+  "A young man with a chic, messy bun and a strong cheekbone structure, radiating confidence",
+  "A man in his late 20s with slicked-back dark hair and a subtle stubble, giving off an air of sophistication",
+  "A fashion-forward young man with asymmetrical short hair dyed a bold color and expressive facial features",
+  "A man in his early 30s with wavy dark hair and a well-defined jawline, often wearing a relaxed expression",
+  "A young man with a modern fade haircut and a bright smile, showcasing an approachable demeanor",
+  "A man in his mid-20s with tousled sandy blonde hair and a charismatic aura, embodying creativity",
+  "A stylish young man with straight, jet-black hair and a strong jawline, often seen with an intriguing gaze",
+  "A man in his late 20s with messy, layered hair and sun-kissed skin, radiating a natural charm",
+  "A young man with vibrant teal spikes in his hair, showcasing his adventurous personality and confidence",
   "A man in his 20s with wavy, medium-length hair and a clean-shaven face",
   "A man in his 20s with straight, parted hair and a light stubble",
   "A man in his early 20s with medium-length curly hair and a square jawline",
@@ -274,22 +298,11 @@ const male = [
   "A man in his 40s with a short beard and a scar over his left eyebrow",
   "A middle-aged man with thick glasses, a mustache, and thinning hair",
   "A middle-aged man with shoulder-length hair tied back and a rugged face",
-  "A man in his 50s with salt-and-pepper hair and a strong brow",
-  "A man in his 50s with a balding crown and a goatee",
   "A man in his 50s with thinning gray hair and a pair of reading glasses",
   "An older man with a full head of white hair and a bushy mustache",
   "An older man with a long beard and deep-set eyes",
-  "An elderly man with a bald head, deep wrinkles, and kind eyes",
-  "An elderly man with wispy white hair and sunken cheeks",
-  "A very old man with a stooped posture, thin white hair, and a gentle smile",
-  "A man in his 60s with a gray beard and a weathered face",
-  "A man in his 60s with slicked-back gray hair and a stern expression",
   "A man in his 60s with a long, white ponytail and a weathered face",
-  "A man in his 70s with a bald head, a prominent nose, and kind eyes",
-  "A man in his 70s with white hair combed to the side and a trimmed beard",
-  "A man in his 70s with a clean-shaven face, liver spots, and a gentle expression",
-  "An elderly man with a full white beard and a wrinkled, leathery face",
-  "An elderly man with sparse white hair, a wrinkled forehead, and bright, sharp eyes"
+  "A man in his 70s with a bald head, a prominent nose, and kind eyes"
 ];
 
 const female = [
@@ -314,6 +327,21 @@ const female = [
   "A woman in her 30s with medium-length hair and a few wrinkles around her eyes",
   "A woman in her 30s with long, straight hair and a confident expression",
   "A woman in her 30s with shoulder-length curls and a soft, relaxed expression",
+  "A woman in her late 20s with deep red hair styled in loose waves and bold, smoky eyeshadow",
+  "A young woman with platinum blonde pixie cut and subtle cat-eye eyeliner",
+  "A woman in her early 20s with shoulder-length black curls and a touch of shimmering highlighter on her cheeks",
+  "A woman in her 30s with sleek, straight dark brown hair and perfectly winged eyeliner",
+  "A young woman with auburn hair styled in a messy bun and vibrant, glossy red lipstick",
+  "A woman in her mid-20s with pastel pink hair and soft, glittery eyeshadow",
+  "A woman in her 30s with chestnut hair in loose waves and metallic eyeshadow that catches the light",
+  "A young woman with honey blonde, beachy waves and defined, thick eyebrows",
+  "A woman in her late 20s with jet-black hair in a sleek bob, accented by bold, matte lipstick",
+  "A woman in her 30s with golden-brown hair pulled into a high ponytail",
+  "A young woman with lilac-tinted curls framing her face and a natural, dewy makeup finish",
+  "A woman in her early 20s with chocolate brown hair in soft curls and a dramatic, dark eyeshadow look",
+  "A woman in her late 20s with dark blue, straight hair falling to her shoulders and a sharp, winged eyeliner",
+  "A young woman with silver hair in a short, edgy bob and shimmery, iridescent highlighter on her brow bones",
+  "A woman in her 30s with long, raven-black hair, styled with subtle waves and deep burgundy lipstick",
   "A middle-aged woman with shoulder-length wavy hair and laugh lines",
   "A middle-aged woman with a high ponytail and tired eyes",
   "A woman in her 40s with graying hair and a warm smile",
@@ -322,22 +350,17 @@ const female = [
   "A woman in her 50s with shoulder-length hair and slight crow's feet",
   "A woman in her 50s with a curly bob and a gentle expression",
   "A woman in her 50s with a graying bob, thin eyebrows, and a gentle smile",
-  "An older woman with a bun of white hair and a round, wrinkled face",
   "An older woman with long, graying hair and a serene expression",
   "An elderly woman with thin white hair and deep wrinkles around her mouth",
-  "An elderly woman with short, curly hair and sunken cheeks",
   "A very old woman with her hair in a tight bun and soft, kind eyes",
-  "A woman in her 60s with a bob of silver hair and a proud posture",
-  "A woman in her 60s with long, silver hair tied in a braid and laugh lines",
-  "A woman in her 70s with long, white hair and a gentle smile",
-  "A woman in her 70s with short white curls, a wrinkled forehead, and a bright expression",
-  "An elderly woman with a long white braid, prominent cheekbones, and warm eyes",
-  "An elderly woman with short white hair, deep-set eyes, and a frail frame"
+  "An elderly woman with a long white braid, prominent cheekbones, and warm eyes"
 ];
 
 const animal = [
   "A dog",
   "Three dogs",
+  "A Alaskan Malamute",
+  "A Welsh Corgi",
   "A cute kitten",
   "A cat",
   "Two cats",
@@ -350,103 +373,22 @@ const animal = [
   "A wolf",
   "A group of wolfs",
   "A lion",
-  "Five lions",
+  "Two lions",
   "A dragon",
-  "A unicorn",
   "A squirrel",
-  "A giraffe",
-  "A zebra",
-  "An elephant",
   "A monkey",
   "A group of monkeys",
-  "A kangaroo",
   "A panda",
   "A penguin",
-  "A hedgehog",
   "A raccoon",
   "A cheetah",
   "An owl",
-  "A seal",
-  "A camel",
   "A llama",
   "Two llamas",
   "A koala",
-  "A moose",
   "A flamingo",
-  "A peacock",
   "A bison",
   "A mouse"
-];
-
-const job = [
-  "wizard",
-  "knight",
-  "robot",
-  "alien",
-  "superhero",
-  "supervillain",
-  "princess",
-  "prince",
-  "king",
-  "queen",
-  "farmer",
-  "chef",
-  "musician",
-  "painter",
-  "dancer",
-  "group of dancers",
-  "astronaut",
-  "scientist",
-  "teacher",
-  "student",
-  "group of students",
-  "police officer",
-  "firefighter",
-  "doctor",
-  "nurse",
-  "soldier",
-  "group of soldiers",
-  "pirate",
-  "ninja",
-  "samurai",
-  "monk",
-  "priest",
-  "nun",
-  "ghost",
-  "group of ghosts",
-  "vampire",
-  "zombie",
-  "mummy",
-  "skeleton",
-  "clown",
-  "jester",
-  "bard",
-  "blacksmith",
-  "fisherman",
-  "hunter",
-  "gatherer",
-  "traveler",
-  "explorer",
-  "journalist",
-  "architect",
-  "engineer",
-  "pilot",
-  "librarian",
-  "mechanic",
-  "gardener",
-  "artist",
-  "actor",
-  "director",
-  "photographer",
-  "writer",
-  "editor",
-  "nanny",
-  "barista",
-  "waiter",
-  "diplomat",
-  "translator",
-  "biologist",
-  "historian"
 ];
 
 const specialCharacters = [
@@ -473,15 +415,12 @@ const specialCharacters = [
   "The Joker",
   "Wonder Woman",
   "Batman",
-  "Iron Man",
-  "Spider-Man",
   "Daredevil",
   "Superman",
   "The Terminator",
   "Alexander the Great",
   "Napoleon Bonaparte",
   "Winston Churchill",
-  "Joan of Arc",
   "Bruce Lee",
   "Muhammad Ali",
   "Charlie Chaplin",
@@ -509,128 +448,244 @@ const groupPerson = [
   "A group of children of various ages",
   "A young couple",
   "A police officer and a thief",
-  "A wizard and a knight",
   "A robot and a human",
   "A pirate and a sailor",
-  "A spy and a diplomat",
-  "A vampire and a werewolf",
-  "A king and a rebel",
-  "A superhero and a villain",
-  "A zombie and a survivor",
-  "A dragon and a knight",
-  "A witch and a fairy",
-  "A time traveler and a historian",
-  "A samurai and a ninja",
-  "A detective and a ghost",
-  "A robot and an alien",
-  "A superhero and a mutant",
-  "A wizard and a scientist",
-  "A queen and a spy",
-  "A dragon and a sorcerer",
-  "A cowboy and a futuristic",
-  "A superhero and an alien"
+  "Donald John Trump and Elon Musk",
+  "Minions with their leader Gru",
+  "Harry Potter, Hermione Granger, and Ron Weasley",
+  "The Avengers team (Iron Man, Captain America, Thor, and Hulk)",
+  "SpongeBob SquarePants and Patrick Star",
+  "The Guardians of the Galaxy crew (Star-Lord, Gamora, Drax, Rocket, and Groot)",
+  "Sherlock Holmes and Dr. John Watson",
+  "Buzz Lightyear and Woody from Toy Story",
+  "Mario and Luigi from the Mario Bros",
+  "The X-Men team (Wolverine, Cyclops, Storm, Jean Grey, Professor X)",
+  "Shrek, Donkey, and Fiona",
+  "Ash Ketchum, Pikachu, and Misty from Pokémon",
+  "Rick and Morty from Rick and Morty",
+  "The Teenage Mutant Ninja Turtles (Leonardo, Michelangelo, Donatello, Raphael, and Splinter)",
+  "The Simpsons family (Homer, Marge, Bart, Lisa, and Maggie)",
+  "Mickey Mouse, Donald Duck, and Goofy",
+  "Po, Tigress, and Master Shifu from Kung Fu Panda"
 ];
 
-const maleClothes = [
-  // Daily and modern clothing
-  "Business suit with a sharp tie",
-  "Casual T-shirt and shorts",
-  "A tuxedo with a red bowtie",
-  "A flannel shirt and rugged boots",
-  "Leather jacket and aviator sunglasses",
-  "A long trench coat with a hidden weapon",
-  "Modern, minimalist black suit",
-  "Sporty outfit with sneakers",
-  "Classic white shirt and denim overalls",
-  "A cowboy's hat, boots, and spurs",
-  "A samurai's full armor with a katana",
-  "A musketeer's tunic and feathered hat",
-  "A police officer's uniform with a badge",
-  "A firefighter's heavy protective gear",
-  "A soldier's camouflage uniform and helmet",
-  "A construction worker's hard hat and tool belt",
-  "A doctor's white lab coat with a stethoscope",
-  "A chef's hat",
-  "A scientist's lab coat covered in chemical stains",
-  "A teacher's cardigan and khaki pants",
+const maleDailyClothes = [
+  "business suit with a sharp tie",
+  "casual T-shirt and shorts",
+  "a tuxedo with a red bowtie",
+  "a flannel shirt and rugged boots",
+  "leather jacket and aviator sunglasses",
+  "a long trench coat",
+  "modern, minimalist black suit",
+  "sporty outfit with sneakers",
+  "classic white shirt and denim overalls",
+  "a cowboy's hat, boots, and spurs",
+  "a police officer's uniform with a badge",
+  "a soldier's camouflage uniform and helmet",
+  "a training suit",
+  "a teacher's cardigan and khaki pants",
+  "a warm plaid shirt",
 
-  // Traditional and cultural costumes
-  "Traditional Japanese kimono with a wide obi belt",
+  "slim-fit navy blazer with tailored trousers and a crisp white shirt, paired with leather loafers",
+  "casual bomber jacket with a graphic tee and distressed slim-fit jeans, finished with white sneakers",
+  "lightweight linen shirt with rolled-up sleeves, paired with khaki chinos and desert boots",
+  "tailored wool overcoat worn over a turtleneck sweater and dark jeans, with Chelsea boots",
+  "vintage-inspired denim jacket with a plain black tee and cargo pants, accessorized with a beanie and aviator sunglasses",
+  "sleek leather biker jacket over a fitted white henley, paired with dark-wash skinny jeans and ankle boots",
+  "minimalist monochrome outfit with a black crewneck sweater, tapered jogger pants, and stylish sneakers",
+  "layered look with a cozy knit cardigan over a basic tee, slim-fit jeans, and suede desert boots",
+  "sporty athleisure set with a zip-up track jacket, fitted joggers, and running shoes",
+  "modern streetwear outfit featuring an oversized hoodie, ripped jeans, and high-top sneakers",
+  "lightweight bomber jacket over a striped Breton shirt, paired with cuffed chinos and white canvas sneakers",
+  "tailored corduroy blazer with a wool crewneck sweater, slim-fit trousers, and leather brogues",
+  "oversized flannel shirt worn open over a graphic tee and skinny jeans, with high-top sneakers",
+  "fitted parka jacket layered over a hoodie, paired with tapered cargo pants and chunky hiking boots",
+  "sleek knit polo shirt tucked into slim cropped trousers, accessorized with a leather belt and loafers",
+
+  "traditional Japanese kimono with a wide obi belt",
   "Scottish tartan kilt with a sporran",
   "Middle Eastern kaftan with delicate patterns",
-  "A Viking tunic with fur accents",
-  "A Maasai shuka with beaded jewelry",
-
-  // Historical clothing
-  "A Roman gladiator's armor with a crested helmet",
-  "A medieval peasant's tunic and belt",
-  "A musketeer's tunic and feathered hat",
-  "A knight's shining plate armor with a crest",
-  "A Roman senator's toga with golden laurel crown",
-
-  // Fantasy and mythical costumes
-  "A pirate's tattered coat and tricorne hat",
-  "A warrior's fur-lined cape and leather bracers",
-  "A dragon-scale armor with glowing runes",
-  "A steampunk adventurer's outfit",
-  "A futuristic bodysuit with armor plating",
-  "A futuristic police uniform with a tactical visor",
-  "A mech pilot's flight suit with tech interfaces",
-  "A space captain's uniform with insignias",
-  "A rebel fighter's rugged gear with gadgets",
-  "A battle suit with laser gauntlets and shields"
+  "a Viking tunic with fur accents",
+  "a Maasai shuka with beaded jewelry"
 ];
 
-const femaleClothes = [
-  // Daily and modern clothing
-  "Flowing silk gown adorned with intricate embroidery",
-  "Elegant evening gown with sparkling sequins",
-  "Vintage polka dot dress",
-  "Summer dress with floral patterns",
-  "Casual jeans and a futuristic jacket",
-  "A comfy hoodie and jeans",
-  "A Victorian lace dress with a corset",
-  "A Renaissance-era gown with puffed sleeves",
-  "A business suit with a pencil skirt",
-  "Sporty outfit with leggings and sneakers",
-  "A summer sundress with floral patterns",
-  "A traditional Hawaiian hula skirt made of leaves",
-  "A librarian's glasses and cozy sweater",
-  "A painter's smock covered in colorful paint splatters",
-  "A nurse's scrubs with a comforting smile",
-  "A teacher's cardigan and pencil skirt",
+const femaleDailyClothes = [
+  "flowing silk gown adorned with intricate embroidery",
+  "elegant evening gown with sparkling sequins",
+  "vintage polka dot dress",
+  "summer dress with floral patterns",
+  "casual jeans and a futuristic jacket",
+  "a comfy hoodie and jeans",
+  "a Renaissance-era gown with puffed sleeves",
+  "a business suit with a pencil skirt",
+  "sporty outfit with leggings and sneakers",
+  "a summer sundress with floral patterns",
+  "a glasses and cozy sweater",
+  "a teacher's cardigan and pencil skirt",
 
-  // Traditional and cultural costumes
-  "Chinese qipao with intricate dragon embroidery",
+  "oversized blazer in a muted pastel tone, paired with high-waisted tailored pants and a silk camisole",
+  "cropped leather moto jacket worn over a fitted turtleneck sweater and high-rise skinny jeans, complemented by ankle boots",
+  "flowy midi skirt with abstract prints, paired with a tucked-in ribbed sweater and platform sneakers",
+  "relaxed-fit trench coat over a form-fitting knit dress, paired with knee-high leather boots",
+  "high-waisted wide-leg trousers with a tucked-in satin blouse, accessorized with a statement belt and pointed-toe heels",
+  "sleek oversized coat paired with slim-fit jeans, a tucked-in basic tee, and chunky sneakers",
+  "layered look with an oversized denim jacket over a cropped hoodie, paired with biker shorts and trendy sneakers",
+  "modern co-ord set with a crop top and matching high-waisted pants, styled with minimalistic jewelry and slide sandals",
+  "classic trench coat worn over a pleated midi dress, paired with ankle strap heels",
+  "off-the-shoulder knit sweater tucked into a faux leather mini skirt, finished with knee-high boots",
+  "tailored double-breasted blazer paired with wide-leg culottes, and finished with heeled ankle boots",
+  "longline cardigan layered over a fitted tee, high-rise mom jeans, and chunky sneakers",
+  "fitted denim jacket paired with a floral maxi dress and lace-up sandals, perfect for casual outings",
+  "statement puff-sleeve blouse tucked into high-rise flared jeans, accessorized with a crossbody bag and loafers",
+  "sleek wrap dress in bold geometric patterns, styled with minimal jewelry and pointed-toe flats",
+
+  "Chinese qipao",
   "Indian sari with golden thread details",
-  "A Spanish flamenco dress with ruffles",
-  "An embroidered Russian sarafan",
-  "A colorful Mexican huipil with floral patterns",
-  "A traditional African dashiki",
-  "A Middle Eastern kaftan with delicate patterns",
-  "A Viking tunic with fur accents",
+  "a Spanish flamenco dress with ruffles",
+  "an embroidered Russian sarafan",
+  "a colorful Mexican huipil with floral patterns",
+  "a traditional African dashiki",
+  "a Middle Eastern kaftan with delicate patterns",
+  "a Viking tunic with fur accents",
+  "a traditional Hawaiian hula skirt made of leaves",
 
-  // Historical clothing
-  "A Victorian lace dress with a corset",
-  "A Baroque ball gown with intricate ruffles",
-  "A 1920s flapper dress with fringe",
-  "A 1950s poodle skirt with a scarf",
-  "A 1960s mod dress with bold geometric patterns",
-  "A medieval peasant's tunic and belt",
-  "A medieval nun's robe and cross",
+  "a Victorian lace dress with a corset",
+  "a Baroque ball gown with intricate ruffles",
+  "a 1920s flapper dress with fringe",
+  "a 1950s poodle skirt with a scarf",
+  "a 1960s mod dress with bold geometric patterns",
+  "a medieval peasant's tunic and belt",
+  "a medieval nun's robe and cross"
+];
 
-  // Fantasy and mythical costumes
-  "A fairy's delicate dress made of flower petals",
-  "A mystical cloak that shifts colors with the light",
-  "A witch's dark, flowing gown and pointed hat",
-  "A steampunk adventurer's outfit with brass goggles",
-  "A Valkyrie's armor with feathered wings",
-  "A futuristic bodysuit with glowing circuits",
-  "A dragon-scale armor with glowing runes",
-  "A pirate's tattered coat and tricorne hat",
-  "A princess's flowing gown with jeweled tiara",
-  "A sorcerer's robe with arcane symbols",
-  "A knight's shining plate armor with a crest"
+const maleFashionClothes = [
+  "casual T-shirt and shorts",
+  "a flannel shirt and rugged boots",
+  "leather jacket and aviator sunglasses",
+  "a long trench coat",
+  "sporty outfit with sneakers",
+  "slim-fit navy blazer with tailored trousers and a crisp white shirt, paired with leather loafers",
+  "casual bomber jacket with a graphic tee and distressed slim-fit jeans, finished with white sneakers",
+  "lightweight linen shirt with rolled-up sleeves, paired with khaki chinos and desert boots",
+  "tailored wool overcoat worn over a turtleneck sweater and dark jeans, with Chelsea boots",
+  "vintage-inspired denim jacket with a plain black tee and cargo pants, accessorized with a beanie and aviator sunglasses",
+  "sleek leather biker jacket over a fitted white henley, paired with dark-wash skinny jeans and ankle boots",
+  "minimalist monochrome outfit with a black crewneck sweater, tapered jogger pants, and stylish sneakers",
+  "layered look with a cozy knit cardigan over a basic tee, slim-fit jeans, and suede desert boots",
+  "sporty athleisure set with a zip-up track jacket, fitted joggers, and running shoes",
+  "modern streetwear outfit featuring an oversized hoodie, ripped jeans, and high-top sneakers",
+  "lightweight bomber jacket over a striped Breton shirt, paired with cuffed chinos and white canvas sneakers",
+  "tailored corduroy blazer with a wool crewneck sweater, slim-fit trousers, and leather brogues",
+  "oversized flannel shirt worn open over a graphic tee and skinny jeans, with high-top sneakers",
+  "fitted parka jacket layered over a hoodie, paired with tapered cargo pants and chunky hiking boots",
+  "sleek knit polo shirt tucked into slim cropped trousers, accessorized with a leather belt and loafers",
+];
+
+const femaleFashionClothes = [
+  "vintage polka dot dress",
+  "summer dress with floral patterns",
+  "casual jeans and a futuristic jacket",
+  "a comfy hoodie and jeans",
+  "a business suit with a pencil skirt",
+  "sporty outfit with leggings and sneakers",
+  "a summer sundress with floral patterns",
+  "a glasses and cozy sweater",
+  "oversized blazer in a muted pastel tone, paired with high-waisted tailored pants and a silk camisole",
+  "cropped leather moto jacket worn over a fitted turtleneck sweater and high-rise skinny jeans, complemented by ankle boots",
+  "flowy midi skirt with abstract prints, paired with a tucked-in ribbed sweater and platform sneakers",
+  "relaxed-fit trench coat over a form-fitting knit dress, paired with knee-high leather boots",
+  "high-waisted wide-leg trousers with a tucked-in satin blouse, accessorized with a statement belt and pointed-toe heels",
+  "sleek oversized coat paired with slim-fit jeans, a tucked-in basic tee, and chunky sneakers",
+  "layered look with an oversized denim jacket over a cropped hoodie, paired with biker shorts and trendy sneakers",
+  "modern co-ord set with a crop top and matching high-waisted pants, styled with minimalistic jewelry and slide sandals",
+  "classic trench coat worn over a pleated midi dress, paired with ankle strap heels",
+  "off-the-shoulder knit sweater tucked into a faux leather mini skirt, finished with knee-high boots",
+  "tailored double-breasted blazer paired with wide-leg culottes, and finished with heeled ankle boots",
+  "longline cardigan layered over a fitted tee, high-rise mom jeans, and chunky sneakers",
+  "fitted denim jacket paired with a floral maxi dress and lace-up sandals, perfect for casual outings",
+  "statement puff-sleeve blouse tucked into high-rise flared jeans, accessorized with a crossbody bag and loafers",
+  "sleek wrap dress in bold geometric patterns, styled with minimal jewelry and pointed-toe flats",
+];
+
+const maleFantasticClothes = [
+  "yellow raincoat with a hood shaped like a duck's head",
+  "spacesuit-themed hoodie with star patches and shiny silver pants",
+  "pirate hat with a parrot on the shoulder and matching striped shorts",
+  "dinosaur-shaped backpack with matching dino-print sneakers",
+  "shark-shaped hoodie with fin on the back and toothy hood",
+  "robot-patterned jacket with buttons that look like gears",
+  "superhero cape with matching mask and lightning-bolt patterned pants",
+  "a black leather trench coat with silver accents and a high collar",
+  "a royal outfit with a velvet doublet and gold embroidery, paired with a crimson cape",
+  "a rugged explorer's outfit with a wide-brimmed hat, leather jacket, and heavy boots",
+  "a tech-powered suit with glowing chest emblem, but the emblem is a giant smiling emoji",
+  "a hammer-wielding warrior costume, but the hammer is a giant inflatable squeaky toy",
+  "a hotdog costume with mustard and ketchup bottles as shoulder pads",
+  "a giant banana suit with tiny monkeys hanging from the pockets",
+  "a cowboy outfit where the hat is so big",
+  "a knight's armor made entirely of oversized LEGO bricks",
+  "a Coca-Cola can-shaped costume with the words \"Hit Me\" written on it",
+  "a Roman gladiator's armor with a crested helmet",
+  "a medieval peasant's tunic and belt",
+  "a musketeer's tunic and feathered hat",
+  "a knight's shining plate armor with a crest",
+  "a Roman senator's toga with golden laurel crown",
+  "a warrior's fur-lined cape and leather bracers",
+  "a steampunk adventurer's outfit",
+  "a futuristic bodysuit with armor plating",
+  "a space captain's uniform with insignias",
+  "a rebel fighter's rugged gear with gadgets",
+  "a battle suit with laser gauntlets and shields",
+  "a wizard's robe with a long staff and pointed hat",
+  "a king's royal robe with a golden crown",
+  "a farmer's overalls with muddy boots and a straw hat",
+  "a pirate's eyepatch and long coat with a cutlass",
+  "a ninja's stealthy black garb and mask",
+  "a robot's metallic suit with LED lights",
+  "a zombie's torn clothing with dirt and scars",
+  "a mummy's bandages wrapped tightly with ancient hieroglyphs",
+  "a jester's colorful outfit with a jingling hat",
+  "a blacksmith's apron with gloves and a hammer",
+  "a fisherman's waterproof jacket and boots",
+  "a hunter's camo jacket and hat",
+  "a journalist's notepad and fedora with a press badge",
+  "a mechanic's greasy coveralls with a wrench",
+  "a gardener's sunhat"
+];
+
+const femaleFantasticClothes = [
+  "duck-patterned bikini top with matching shorts",
+  "white tank top with a colorful popcorn print",
+  "cat-shaped hoodie with little ears and paw prints on the sleeves",
+  "ice cream cone-patterned dress with a scoop-shaped handbag",
+  "rainbow-striped overalls with star-shaped buttons and glittery sneakers",
+  "ladybug-themed cape with a matching polka-dot dress",
+  "a battle-ready leather suit with high boots and armored shoulder plates",
+  "a watermelon slice dress with seeds that are tiny hidden pockets",
+  "a Coca-Cola can-shaped costume with the words \"Kiss Me\" written on it",
+  "a Victorian lace dress with a corset",
+  "a Baroque ball gown with intricate ruffles",
+  "a 1920s flapper dress with fringe",
+  "a 1950s poodle skirt with a scarf",
+  "a 1960s mod dress with bold geometric patterns",
+  "a medieval peasant's tunic and belt",
+  "a medieval nun's robe and cross",
+  "a fairy's delicate dress made of flower petals",
+  "a witch's dark, flowing gown and pointed hat",
+  "a steampunk adventurer's outfit",
+  "a futuristic bodysuit with glowing circuits",
+  "a princess's flowing gown with jeweled tiara",
+  "a knight's shining plate armor with a crest",
+  "a queen's royal gown with a jeweled tiara",
+  "a farmer's denim overalls with a wide-brimmed hat",
+  "a pirate's bandana and corset with high boots",
+  "a robot's futuristic silver outfit",
+  "a zombie's tattered dress",
+  "a jester's playful multicolored dress with bells",
+  "a huntress's camo outfit with a bow and arrows",
+  "a journalist's sleek trench coat",
+  "a pilot's tailored aviator jacket with insignias",
+  "a gardener's apron with gardening tools"
 ];
 
 const maleName = [
@@ -669,57 +724,66 @@ const femaleName = [
   "Xemena Porter"
 ];
 
-const commonActions = [
+const commonDailyActions = [
   "looking surprised",
-  "looking confused",
   "looking angry",
-  "looking scared",
   "looking sad",
   "looking happy",
-  "laughing",
-  "smiling",
-  "yawning sleepily",
+  "with a relaxed expression",
   "jump up happily",
-  "blowing dandelion",
-  "blow balloons",
   "hold a puppy",
-  "waving",
   "waving energetically at the viewer",
   "petting a kitten",
-  "nodding in agreement",
-  "giving a peace sign",
   "giving a thumbs-up with confidence",
-  "clapping hands slowly with approval",
-  "winking cheekily",
-  "raising eyebrows in amusement",
-  "crossing fingers for good luck",
-  "holding both hands up in surrender",
-  "gesturing to come closer",
-  "shrugging with a carefree smile",
   "placing one hand over the chest",
-  "rubbing chin thoughtfully",
   "blowing a kiss playfully",
   "making a heart shape with hands",
-  "holding up a finger to signal quiet",
-  "mocking a strongman pose",
-  "flexing arms to show off muscles",
   "making a silly face with tongue out",
-  "doing finger guns playfully",
-  "resting chin on hand with a smirk",
-  "nodding in agreement",
-  "shrugging with palms up",
-  "blowing bubbles",
   "clapping hands enthusiastically",
-  "pointing finger to lips in thought",
-  "raising eyebrows in amusement",
+];
+
+const commonFashionActions = [
+  "with a Saluki together",
+  "sitting on the floor with legs extended, one arm draped casually over a knee",
+  "standing tall, one hand raised above the head as the wind blows through the hair",
+  "head tilted back, eyes closed",
+  "hands in pockets, with a relaxed posture",
+  "standing with one leg bent slightly, hand resting on the wall, gazing confidently",
+  "one leg bent up, looking down with a soft smile",
+  "standing on tiptoes, body slightly turned, arms crossed over the chest, with a determined gaze",
+  "hands relaxed behind the back, shoulders leaning slightly, back facing the viewer with a casual glance over the shoulder",
+  "tilting forward slightly while holding the brim of a hat, one hand in a pocket, with a relaxed posture",
+  "standing with legs crossed, one hand gently touching the chin in a thoughtful expression, gazing into the distance",
+  "kneeling on a ground, body leaning forward with a playful expression",
+  "half-crouching on the ground, hands resting casually on the knees, head tilted, exuding elegance and confidence",
+  "one leg in front, arms swinging naturally with a wind-swept look, eyes focused ahead"
+];
+
+const commonFantasticActions = [
+  "looking surprised",
+  "looking angry",
+  "looking happy",
+  "crying sadly",
+  "with a exaggerated expression, shouting",
+  "with a playful and eccentric expression",
+  "have a very fat figure, but very cute",
+  "jump up happily",
+  "floating in the air",
+  "hold a puppy",
+  "petting a kitten",
+  "making a silly face with tongue out",
+  "riding a lion",
+  "holding a huge lollipop happily",
+  "eating ice cream happily",
+  "with a Siamese cat together",
+  "with a super big Garfield cat together",
+  "with a wolf together",
   "with the Hulk together",
   "with a robot together",
-  "playing hopscotch with Thor",
-  "taking selfies with a vampire",
-  "with Doctor Strange together",
-  "with Minions together",
-  "with SpongeBob together",
-  "with Pikachu together"
+  "with the Minions together",
+  "with the SpongeBob together",
+  "with the Pikachu together",
+  "with a monkey sitting on shoulder"
 ];
 
 const dailyScenes = [
@@ -780,7 +844,7 @@ const dailyScenes = [
     "taking clothes out of the closet"
   ]],
   ["in a flower-filled meadow at dawn", [
-    "walking through the field admiring the flowers",
+    "walks from the field admiring the flowers",
     "taking photographs of the sunrise",
     "lying down in the grass and looking at the sky",
     "picking a bouquet of wildflowers",
@@ -793,12 +857,11 @@ const dailyScenes = [
     "building a sandcastle",
     "sipping a drink from a coconut"
   ]],
-  ["in a quaint bakery on a cobblestone street", [
+  ["in a quaint bakery", [
     "looking at the pastries in the display case",
     "ordering a croissant and coffee",
     "carrying a bag of freshly baked bread",
-    "sitting at a small table enjoying a treat",
-    "talking to the baker about their craft"
+    "sitting at a small table enjoying a treat"
   ]],
   ["in a bustling airport terminal", [
     "checking in at the ticket counter",
@@ -810,8 +873,6 @@ const dailyScenes = [
   ["in a crowded subway station with commuters rushing", [
     "walking quickly through the station",
     "standing on the platform waiting for a train",
-    "checking the train schedule on a display",
-    "holding onto a handrail as the train arrives",
     "moving through the crowd to board the subway"
   ]],
   ["on a rooftop garden overlooking a bustling city", [
@@ -823,24 +884,13 @@ const dailyScenes = [
   ]],
   ["in a modern art gallery with abstract sculptures", [
     "looking at a sculpture thoughtfully",
-    "walking through the gallery observing the art",
-    "reading the information plaque next to a piece",
-    "discussing a sculpture with a companion",
-    "taking a photograph of a particularly striking piece"
-  ]],
-  ["in a quiet library with towering bookshelves", [
-    "browsing the bookshelves",
-    "reading a book at a table",
-    "using a computer at a workstation",
-    "returning a book to the shelves",
-    "whispering to a librarian at the help desk"
+    "walks from the gallery observing the art",
+    "discussing a sculpture with a companion"
   ]],
   ["in a large greenhouse filled with exotic plants", [
     "walking amongst the plants",
-    "examining a particular plant closely",
     "taking photographs of the flowers",
-    "watering plants with a watering can",
-    "talking to a gardener about the different species"
+    "watering plants with a watering can"
   ]],
   ["at a horse stable in a countryside manor", [
     "grooming a horse",
@@ -859,33 +909,24 @@ const dailyScenes = [
   ["in a lush vineyard in the countryside", [
     "walking through the rows of grapevines",
     "sampling grapes from a vine",
-    "talking to a winemaker about the vineyard",
-    "taking photographs of the landscape",
     "carrying a basket of harvested grapes"
   ]],
   ["at a train station in the middle of nowhere", [
     "waiting on the platform for a train",
-    "looking at the train schedule posted on the wall",
-    "sitting on a bench with luggage",
-    "walking around the empty platform",
-    "watching the train arrive at the station"
+    "sitting on a bench with luggage"
   ]],
   ["at a crowded amusement park with colorful rides", [
     "riding a roller coaster",
     "eating cotton candy",
-    "playing carnival games",
-    "walking through the park with friends",
-    "waiting in line for a ride"
+    "playing carnival games"
   ]],
-  ["in a busy sports stadium during a championship game", [
+  ["in a busy sports stadium", [
     "watching the game from the stands",
     "cheering for a team",
-    "eating stadium food",
     "high-fiving fellow fans",
     "holding up a sign supporting the team"
   ]],
   ["in a graffiti-covered alley in an industrial area", [
-    "taking photographs of the graffiti",
     "walking cautiously down the alley",
     "admiring the street art",
     "sketching in a notebook",
@@ -895,55 +936,33 @@ const dailyScenes = [
     "paddling a canoe across the lake",
     "fishing from a boat",
     "swimming in the lake",
-    "sitting on the shore and enjoying the view",
-    "taking photographs of the mountain reflections"
-  ]],
-  ["in a serene meadow filled with wildflowers", [
-    "walking through the meadow picking flowers",
-    "lying in the grass and looking at the clouds",
-    "taking photographs of the wildflowers",
-    "having a picnic with friends",
-    "chasing butterflies through the field"
-  ]],
-  ["at a bustling medieval marketplace", [
-    "browsing the stalls filled with goods",
-    "bartering with a merchant",
-    "eating a piece of roasted meat",
-    "watching a street performer juggle",
-    "carrying a purchase in a cloth bag"
+    "sitting on the shore and enjoying the view"
   ]],
   ["in a Viking village near a frozen fjord", [
     "walking between the wooden houses",
     "working on a fishing net by the shore",
     "chopping wood for a fire",
-    "wearing a fur cloak and carrying an axe",
     "talking to another villager near a longboat"
   ]],
   ["on a Victorian-era street filled with carriages", [
     "riding in a horse-drawn carriage",
     "walking along the cobblestone street",
     "greeting someone tipping their top hat",
-    "window shopping at a storefront",
     "carrying a parasol to shield from the sun"
   ]],
   ["at a samurai dojo surrounded by cherry blossoms", [
     "practicing swordsmanship with a wooden katana",
     "meditating in the dojo garden",
     "bowing respectfully to a sensei",
-    "sweeping the dojo floor with a broom",
-    "observing other samurai training"
   ]],
   ["at an Egyptian temple with towering obelisks", [
     "walking through the temple ruins",
     "looking up at the hieroglyphics carved on the walls",
-    "taking photographs of the obelisks",
-    "exploring the inner chambers of the temple",
-    "sketching the temple in a notebook"
+    "exploring the inner chambers of the temple"
   ]],
   ["in a 1920s jazz club filled with dancing and music", [
     "dancing the Charleston",
     "sipping a cocktail at a table",
-    "listening to the jazz band play",
     "talking to someone at the bar",
     "snapping fingers to the rhythm of the music"
   ]],
@@ -954,22 +973,14 @@ const dailyScenes = [
     "sitting at a long wooden table eating",
     "talking to a knight in armor"
   ]],
-  ["at a Roman bathhouse with steaming pools", [
-    "relaxing in a warm pool",
-    "receiving a massage",
-    "chatting with other bathers",
-    "wrapping a towel around oneself",
-    "walking on the mosaic tile floor"
-  ]],
   ["in a quiet suburban neighborhood", [
     "mowing the lawn",
-    "playing catch with a child",
+    "playing with a child",
     "walking a dog down the street",
     "washing a car in the driveway",
     "talking to a neighbor over the fence"
   ]],
   ["in a small-town diner with vintage decor", [
-    "sitting at the counter ordering food",
     "drinking coffee from a mug",
     "eating a slice of pie",
     "reading a newspaper at a booth",
@@ -977,17 +988,9 @@ const dailyScenes = [
   ]],
   ["in a sunny park with children playing", [
     "pushing a child on a swing",
-    "watching children play tag",
     "sitting on a park bench reading a book",
     "having a picnic on the grass",
     "throwing a frisbee to a dog"
-  ]],
-  ["at a local library with reading nooks", [
-    "reading a book in a comfortable chair",
-    "browsing the bookshelves",
-    "using a computer at a desk",
-    "studying at a table",
-    "talking quietly to a librarian"
   ]],
   ["in a farmer's field with ripe crops", [
     "harvesting crops by hand",
@@ -1007,15 +1010,7 @@ const dailyScenes = [
     "talking to neighbors",
     "eating food from the grill",
     "playing games with children",
-    "listening to music",
     "dancing in the street"
-  ]],
-  ["at a busy street market with fresh produce", [
-    "buying fruits and vegetables from vendors",
-    "sampling different cheeses",
-    "carrying a shopping bag filled with groceries",
-    "haggling over prices",
-    "smelling fresh herbs and spices"
   ]],
   ["in a family living room with cozy furniture", [
     "watching television together",
@@ -1028,446 +1023,139 @@ const dailyScenes = [
     "watering the flowers with a watering can",
     "pruning roses with gardening shears",
     "smelling the fragrant blooms",
-    "walking through the garden paths",
+    "walks from the garden paths",
     "sitting on a bench admiring the flowers"
   ]],
   ["at a quaint coffee shop with outdoor seating", [
     "sipping coffee at a table outside",
     "reading a book in the sunshine",
     "chatting with a friend over coffee",
-    "people-watching on the street",
     "using a laptop at a table"
-  ]],
-  ["in a suburban backyard with a barbecue grill", [
-    "grilling burgers and hot dogs",
-    "eating at a picnic table",
-    "playing lawn games",
-    "relaxing in lawn chairs",
-    "swimming in a backyard pool"
-  ]],
-  ["on a city street lined with boutique shops", [
-    "window shopping at the boutiques",
-    "carrying shopping bags filled with purchases",
-    "walking down the sidewalk",
-    "stopping to look at a street performer",
-    "entering a shop to browse"
   ]],
   ["at a playground with swings and slides", [
     "swinging on a swing set",
     "sliding down a slide",
     "climbing on the jungle gym",
-    "playing in the sandbox",
-    "sitting on a bench watching children play"
+    "playing in the sandbox"
   ]],
-  ["in a yoga studio with calming music", [
+  ["in a yoga studio", [
     "performing yoga poses",
     "meditating on a mat",
     "stretching on the floor",
-    "listening to calming music",
     "drinking water from a bottle"
   ]],
   ["at a riverside picnic with a checkered blanket", [
     "eating food from a picnic basket",
     "lying on a checkered blanket",
     "throwing rocks into the river",
-    "watching ducks swim by",
     "reading a book by the water"
   ]],
   ["in a vintage bookstore with wooden shelves", [
     "browsing the bookshelves",
     "reading a book in a comfy chair",
-    "talking to the bookstore owner",
-    "buying a stack of old books",
-    "smelling the musty scent of old paper"
-  ]],
-  ["in a botanical garden with exotic plants", [
-    "walking through the greenhouses",
-    "admiring the colorful flowers",
-    "taking photos of rare plants",
-    "reading information plaques about the plants",
-    "sitting on a bench enjoying the scenery"
+    "talking to the bookstore owner"
   ]],
   ["on a peaceful nature trail through the woods", [
     "hiking along the trail",
     "taking photos of the scenery",
-    "listening to the sounds of nature",
-    "identifying different types of trees and plants",
     "breathing in the fresh air"
-  ]],
-  ["at a weekend farmers' market with local goods", [
-    "buying fresh produce from local farmers",
-    "tasting samples of homemade jams and jellies",
-    "carrying a basket filled with groceries",
-    "talking to the farmers about their products",
-    "listening to live music"
-  ]],
-  ["at a contemporary art museum with interactive exhibits", [
-    "touching and interacting with the exhibits",
-    "watching videos and animations",
-    "listening to audio installations",
-    "reading descriptions of the artwork",
-    "discussing the art with a friend"
-  ]],
-  ["in a cozy cabin with a crackling fireplace", [
-    "sitting by the fire reading a book",
-    "drinking hot cocoa",
-    "watching the flames dance",
-    "talking with family and friends",
-    "playing board games"
-  ]],
-  ["on a beachside boardwalk with street performers", [
-    "watching street performers",
-    "eating ice cream",
-    "walking along the boardwalk",
-    "playing arcade games",
-    "buying souvenirs from a shop"
-  ]],
-  ["at a local bakery with freshly baked bread", [
-    "buying freshly baked bread and pastries",
-    "talking to the baker",
-    "smelling the aroma of bread",
-    "choosing from a variety of treats",
-    "carrying a bag of pastries home"
-  ]],
-  ["in a city park with a fountain and benches", [
-    "sitting on a bench watching people pass by",
-    "throwing coins in the fountain",
-    "reading a book under a tree",
-    "walking around the park",
-    "having a picnic on the grass"
   ]],
   ["on a suburban street with autumn leaves", [
     "raking leaves into a pile",
     "walking on crunchy leaves",
-    "taking photos of the colorful trees",
-    "jumping in a pile of leaves",
     "riding a bike down the street"
   ]],
   ["in a home garden with vegetable patches", [
     "watering the vegetable plants",
     "harvesting ripe vegetables",
     "weeding the garden beds",
-    "checking the plants for pests",
     "tying tomato plants to stakes"
-  ]],
-  ["at a crowded farmer's market with seasonal produce", [
-    "buying fresh fruits and vegetables",
-    "sampling locally made cheeses and jams",
-    "talking to the farmers",
-    "carrying a reusable shopping bag",
-    "navigating through the crowd"
-  ]],
-  ["on a beach with volleyball nets and sunbathers", [
-    "playing beach volleyball",
-    "sunbathing on a towel",
-    "swimming in the ocean",
-    "building a sandcastle",
-    "walking along the shoreline"
   ]],
   ["at a local theater with a community play", [
     "watching the play from the audience",
     "applauding the actors",
-    "reading the program",
-    "talking to other audience members during intermission",
-    "taking photos of the stage after the play"
-  ]],
-  ["at a suburban pool party with floats and music", [
-    "swimming in the pool",
-    "floating on an inflatable raft",
-    "eating snacks and drinking beverages",
-    "talking to friends and family",
-    "listening to music and dancing"
+    "talking to other audience members during intermission"
   ]],
   ["at a pet store with a variety of animals", [
     "looking at the animals in cages and tanks",
-    "holding a puppy or kitten",
-    "buying pet food and supplies",
-    "talking to the pet store employees",
+    "holding a kitten",
     "choosing a new pet to take home"
-  ]],
-  ["at a city zoo with family-friendly exhibits", [
-    "looking at the animals in their enclosures",
-    "reading information signs about the animals",
-    "taking photographs of the animals",
-    "watching animal demonstrations and feedings",
-    "riding the zoo train"
-  ]],
-  ["at a local craft fair with handmade goods", [
-    "browsing the handmade crafts",
-    "buying unique gifts and souvenirs",
-    "talking to the artists and craftspeople",
-    "eating food from local vendors",
-    "listening to live music"
-  ]],
-  ["at a vineyard with a wine tasting room", [
-    "sampling different wines",
-    "touring the vineyard",
-    "learning about the winemaking process",
-    "buying bottles of wine",
-    "enjoying the vineyard scenery"
   ]],
   ["at a rural farmhouse with a barn", [
     "feeding farm animals",
     "collecting eggs from the chicken coop",
     "milking a cow",
-    "riding a tractor",
-    "sitting on the porch swing"
-  ]],
-  ["on a sunny café patio with potted plants", [
-    "drinking coffee or tea at a table",
-    "reading a book or newspaper",
-    "talking with friends",
-    "people-watching",
-    "enjoying the sunshine"
-  ]],
-  ["on a city rooftop bar with skyline views", [
-    "drinking cocktails with friends",
-    "admiring the city skyline",
-    "taking photos of the view",
-    "listening to music",
-    "talking to other patrons"
-  ]],
-  ["in a town square with a weekly market", [
-    "browsing the market stalls",
-    "buying fresh produce and local goods",
-    "talking to vendors",
-    "watching street performers",
-    "eating food from street vendors"
+    "riding a tractor"
   ]],
   ["in a contemporary dance studio with a rehearsal", [
     "practicing dance moves",
-    "stretching and warming up",
-    "watching other dancers rehearse",
-    "receiving feedback from the instructor",
-    "marking choreography"
+    "stretching and warming up"
   ]],
   ["in a home workshop with DIY projects", [
     "working on a woodworking project",
-    "using power tools",
     "painting a piece of furniture",
     "organizing tools and supplies",
     "sweeping up sawdust"
   ]],
-  ["on a suburban street with holiday decorations", [
-    "walking down the street admiring the decorations",
-    "taking photos of decorated houses",
-    "carrying presents to a neighbor's house",
-    "singing carols with friends",
-    "putting up holiday decorations on one's own house"
-  ]],
-  ["in a minimalist, monochromatic urban neighborhood with tall, sleek buildings fading into misty horizons", [
-    "walking down the street, shrouded in mist",
-    "taking a photograph of a stark architectural detail",
-    "entering a sleek, minimalist cafe",
-    "hailing a futuristic, self-driving taxi",
-    "observing a drone silently delivering a package"
-  ]],
-  ["in a warm, golden-hued cafe with soft glowing lights and rain-soaked windows that reflect streaks of neon", [
-    "sipping a warm beverage, watching the rain",
-    "writing in a journal, the neon lights reflecting in the puddles outside",
-    "sketching the scene, capturing the interplay of light and shadow",
-    "quietly conversing with a friend, the warm light illuminating their faces",
-    "reading a book, lost in the cozy atmosphere"
-  ]],
-  ["in an ultra-modern apartment with oversized geometric windows, the city skyline blurred and refracted through glass prisms", [
-    "adjusting the smart lighting system to match the city's glow",
+  ["in an ultra-modern apartment with oversized geometric windows", [
     "watering a geometrically arranged succulent garden",
     "practicing yoga, the city lights creating a dynamic backdrop",
     "preparing a meal in the sleek, minimalist kitchen",
     "relaxing on a chaise lounge, gazing at the refracted skyline"
   ]],
-  ["on a suburban street, adorned with extravagant holiday decorations, but transformed into a dreamy, ethereal display of glowing orbs and shimmering", [
-    "walking down the street, mesmerized by the glowing decorations",
-    "taking photos of the otherworldly light displays",
-    "pointing out fantastical shapes in the shimmering lights to a child",
-    "stopping to admire a particularly intricate light sculpture",
-    "marveling at the transformation of familiar houses into dreamlike structures"
-  ]],
-  ["in a foggy forest where towering trees merge into abstract lines, and beams of sunlight pierce through in soft", [
-    "walking cautiously through the fog, the trees looming like giants",
-    "photographing the ethereal beams of sunlight filtering through the fog",
+  ["in a foggy forest where towering trees merge into abstract lines", [
+    "walks from the fog, the trees looming",
     "reaching out to touch the soft moss growing on a tree trunk",
     "pausing to listen to the quiet sounds of the forest",
     "observing the intricate patterns of light and shadow on the forest floor"
   ]],
-  ["in a desert landscape with massive, abstract dunes sculpted by the wind, the sand reflecting iridescent colors under a deep blue sky", [
+  ["in a desert landscape with massive, abstract dunes sculpted by the wind", [
     "climbing a towering sand dune, the sand shifting beneath their feet",
-    "photographing the iridescent colors of the sand",
-    "sketching the abstract shapes of the dunes",
     "shielding their eyes from the sun, gazing at the vast expanse of desert",
     "running down a dune, leaving footprints in the shifting sand"
   ]],
-  ["on a Parisian street at dawn, while iconic rooftops and wrought-iron balconies create a timeless, romantic atmosphere", [
-    "walking along the cobblestone street, taking in the quiet beauty",
-    "photographing the Parisian rooftops in the soft morning light",
-    "sketching the intricate details of a wrought-iron balcony",
-    "sipping a coffee at a small outdoor cafe",
-    "buying a fresh baguette from a nearby boulangerie"
-  ]],
-  ["in a lush, tropical rainforest, the dense foliage illuminated by shafts of sunlight that create patterns of light and shadow", [
-    "walking along a rainforest path, observing the diverse plant life",
-    "photographing the intricate patterns of light and shadow",
-    "listening to the sounds of the rainforest",
-    "carefully examining a colorful tropical flower",
-    "sketching the lush vegetation in a notebook"
-  ]],
-  ["in a minimalist white wall in the centre of the room features wood framed artwork, a contemporary leather chair and a black stone coffee table", [
-    "admiring the framed artwork",
+  ["in a minimalist white wall in the centre of the room features wood framed artwork", [
     "sitting in the leather chair reading a book",
     "placing a cup of coffee on the black stone coffee table",
-    "adjusting the position of a decorative object on the table",
-    "walking around the room appreciating the minimalist aesthetic"
+    "walks from the room appreciating the minimalist aesthetic"
   ]],
-  ["in a muted green room with a textured wallpaper, showcasing a round wooden table and a vintage armchair", [
+  ["in a muted green room with a textured wallpaper, showcasing a round wooden table", [
     "sitting in the vintage armchair reading a book",
     "placing a vase of flowers on the round wooden table",
     "writing in a journal at the table",
-    "touching the textured wallpaper",
-    "admiring the room's calming atmosphere"
+    "touching the textured wallpaper"
   ]],
-  ["in an elegant cream-colored room featuring a large mirror, a marble side table, and a decorative plant in the corner", [
-    "checking their reflection in the large mirror",
+  ["in an elegant cream-colored room featuring a large mirror, a marble side table", [
     "placing a decorative object on the marble side table",
     "watering the decorative plant",
     "admiring the elegant decor",
     "arranging flowers in a vase on the side table"
   ]],
-  ["in an industrial kitchen with exposed brick walls, showcasing a stainless steel island and simple wooden stools", [
+  ["in an industrial kitchen with exposed brick walls, showcasing a stainless steel island", [
     "preparing a meal at the stainless steel island",
     "sitting on a wooden stool having a cup of coffee",
-    "cleaning the stainless steel surfaces",
-    "placing fresh herbs in pots on the island",
-    "admiring the exposed brick walls"
+    "eating a piece of pizza in a big mouthful",
+    "placing fresh herbs in pots on the island"
   ]],
-  ["in a serene yoga studio with light gray walls, featuring a wall of mirrors, yoga mats neatly arranged, and natural wood benches", [
-    "performing yoga poses in front of the mirrors",
-    "sitting on a yoga mat meditating",
-    "stretching on the floor",
-    "placing a water bottle on a wooden bench",
-    "rolling up a yoga mat after practice"
-  ]],
-  ["in a sleek bathroom with deep navy tiles, showcasing a freestanding tub, a minimalist vanity, and a touch of greenery in the corner", [
-    "filling the freestanding tub with water",
-    "placing a towel on the edge of the tub",
-    "brushing teeth at the minimalist vanity",
-    "adjusting the greenery in the corner",
-    "admiring the sleek navy tiles"
-  ]],
-  ["on an outdoor patio with warm wooden decking, featuring simple lounge chairs and a low table surrounded by lush greenery", [
-    "sitting in a lounge chair reading a book",
-    "placing a drink on the low table",
-    "watering the lush greenery",
-    "enjoying the fresh air and sunshine",
-    "chatting with a friend on the patio"
-  ]],
-  ["in a tranquil meditation room with soft beige walls, a small altar, and a few cushions arranged on the floor", [
-    "sitting on a cushion meditating",
-    "lighting a candle on the small altar",
-    "arranging the cushions on the floor",
-    "deep breathing exercises",
-    "practicing mindfulness"
-  ]],
-  ["in a cozy bedroom with pastel walls, featuring a low platform bed and a minimalist bedside table", [
+  ["in a cozy bedroom with pastel walls, featuring a low platform bed", [
     "lying in the low platform bed reading a book",
     "placing a glass of water on the minimalist bedside table",
-    "turning off the bedside lamp",
-    "getting out of bed and stretching",
-    "folding clothes and placing them on the bedside table"
+    "getting out of bed and stretching"
   ]],
-  ["in a clean-lined workshop with gray walls, showcasing tools neatly organized on pegboards and a sturdy workbench in the center", [
-    "working on a project at the workbench",
-    "selecting a tool from the pegboard",
-    "sweeping the floor clean",
-    "organizing tools on the pegboard",
-    "measuring wood for a project"
-  ]],
-  ["in a chic hair salon with white walls, featuring minimalist styling stations and a simple waiting area adorned with plants", [
-    "getting a haircut at a styling station",
-    "reading a magazine in the waiting area",
-    "looking at hair product displays",
-    "talking to a hairstylist",
-    "checking their hair in the mirror"
-  ]],
-  ["in a bright and airy sunroom with glass walls, featuring a small table and chairs, surrounded by indoor plants", [
-    "sitting at the small table drinking tea",
-    "reading a book surrounded by plants",
-    "watering the indoor plants",
-    "enjoying the sunshine streaming through the glass walls",
-    "painting a picture at the table"
-  ]],
-  ["in a spacious garage with white walls, featuring organized storage shelves and a central workbench", [
-    "working on a car repair project",
-    "organizing tools and equipment on the shelves",
-    "sweeping the garage floor",
-    "parking a bicycle in the garage",
-    "painting a project at the workbench"
-  ]],
-  ["in a modern greenhouse with clear glass panels, showcasing neatly arranged potted plants and a simple seating area for plant enthusiasts", [
-    "watering the potted plants",
-    "checking the plants for pests and diseases",
-    "repotting a plant",
-    "sitting in the seating area enjoying the greenery",
-    "pruning a plant with gardening shears"
-  ]],
-  ["in a minimalist classroom with soft blue walls, featuring simple desks arranged in rows and a chalkboard at the front", [
+  ["in a minimalist classroom with soft blue walls", [
     "sitting at a desk writing in a notebook",
     "listening to the teacher lecture",
     "raising their hand to ask a question",
     "writing on the chalkboard",
     "reading a book at their desk"
   ]],
-  ["in an extremely dark room with the shadow of the window projected on the ground", [
-    "fumbling for a light switch",
-    "slowly walking towards the window",
-    "peering out the window cautiously",
-    "standing still, letting their eyes adjust to the darkness",
-    "tracing the outline of the window shadow with their hand"
-  ]],
-  ["in the front of a background of fashionable Morandi style color-blocking", commonActions],
-  ["in the front of a background of fashionable Morandi style solid color", commonActions],
-  ["in the front of a background of fashionable minimalist, youthful and energetic color matching", commonActions],
-  ["in the front of a background of white columns, with long shadows", commonActions],
-  ["in the front of a background of black and white stitching", commonActions],
-  ["in the front of a background of black and white light and shadow", commonActions],
-  ["in the front of a background of minimalist landscape of intersecting black and white lines, creating geometric shapes that seem to float in a stark, infinite white space", commonActions],
-  ["in the front of a background of abstract composition of overlapping translucent circles in pastel hues", commonActions],
-  ["in the front of a background of futuristic grid of perfect cubes and spheres, suspended in a glowing space where each shape casts sharp shadows", commonActions],
-  ["in the front of a background of deconstructed cityscape made entirely of sharp, angular triangles and rectangles, each surface reflecting metallic or matte textures in varying shades of gray", commonActions],
-  ["in the front of a background of surreal space of floating, interconnected rings and lines, each element glowing softly in pastel neon colors", commonActions],
-  ["in the front of a background of series of stacked, monochromatic cubes in various sizes, arranged in a staggered pattern, creating depth and a sense of organized chaos against a neutral backdrop", commonActions],
-  ["in the front of a background of minimalist design of smooth, continuous lines that form abstract, flowing shapes, suspended in midair, evoking a sense of balance and harmony in motion", commonActions],
-  ["in the front of a background of soft, ethereal blend of thin, interweaving lines and geometric shapes, all in muted pastel tones, creating a feeling of serene complexity and delicate balance", commonActions],
-  ["in the front of a background of seamless pattern of concentric circles and sharp intersecting lines, all in grayscale, creating an optical illusion of depth and movement", commonActions],
-  ["in the front of a background of minimalist composition of floating, translucent squares and rectangles, where each shape subtly overlaps and shifts", commonActions],
-  ["in the front of a background of intricate web of crisscrossing, neon-colored lines, forming geometric shapes that pulse with soft glows against a dark", commonActions],
-  ["in the front of a background of three-dimensional spiral of interlocked, metallic polygons, where light plays across the surfaces", commonActions]
-];
-
-const specialScenes = [
   ["in a dense, fog-covered forest at dusk", [
     "carefully stepping over exposed roots",
-    "listening intently to the rustling leaves",
-    "shielding their eyes from the mist"
+    "look up at the sky"
   ]],
   ["at a cascading waterfall in a lush jungle", [
     "gazing up at the cascading water",
-    "wading in the cool pool at the base",
-    "listening to the roar of the waterfall"
-  ]],
-  ["in a vast desert with sand dunes stretching to the horizon", [
-    "shielding their eyes from the sun",
-    "walking along the crest of a dune",
-    "leaving footprints in the sand"
-  ]],
-  ["on a stormy sea crashing against jagged cliffs", [
-    "holding onto the railing of a ship",
-    "watching the waves crash against the rocks",
-    "bracing against the strong wind"
-  ]],
-  ["in a glowing cave filled with crystals", [
-    "running their hand along a crystal surface",
-    "admiring the light refracting through the crystals",
-    "carefully navigating the uneven cave floor"
+    "wading in the cool pool at the base"
   ]],
   ["on a frozen tundra with icy winds", [
     "pulling their coat tighter against the wind",
@@ -1476,8 +1164,7 @@ const specialScenes = [
   ]],
   ["in a dark forest with towering ancient trees", [
     "looking up at the towering trees",
-    "stepping over fallen branches",
-    "listening to the wind rustling through the leaves"
+    "stepping over fallen branches"
   ]],
   ["in a tropical rainforest with misty rain", [
     "feeling the mist on their skin",
@@ -1486,78 +1173,177 @@ const specialScenes = [
   ]],
   ["in a misty swamp with vines hanging from trees", [
     "carefully wading through the murky water",
-    "pushing aside hanging vines",
-    "listening to the croaking of frogs"
+    "pushing aside hanging vines"
   ]],
   ["in a rocky canyon illuminated by the setting sun", [
     "watching the colors of the sunset",
-    "standing on the edge of the canyon",
-    "admiring the shadows cast by the rocks"
-  ]],
-  ["on a volcanic landscape with molten lava flows", [
-    "feeling the heat radiating from the lava",
-    "watching the lava flow slowly down the slope",
-    "keeping a safe distance from the molten rock"
+    "standing on the edge of the canyon"
   ]],
   ["on a starry desert night with distant howling winds", [
     "looking up at the stars",
-    "listening to the wind howling in the distance",
     "wrapping themselves in a blanket"
+  ]],
+  ["at the beachfront sunset in *The Graduate*", [
+    "standing on the beach",
+    "watching the sunset",
+    "talking to another character"
+  ]],
+  ["at the iconic dance scene in *Pulp Fiction*", [
+    "dancing with a partner",
+    "snapping their fingers to the music",
+    "drinking a milkshake"
+  ]],
+  ["at the concert site of a rock band", [
+    "play the electric guitar passionately",
+    "beat the drums passionately",
+    "raise the microphone and shout passionately"
+  ]],
+  ["lying in a bathtub full of bubbles", [
+    "drinking beer",
+    "smoking a cigar"
+  ]]
+];
+
+const fashionScenes = [
+  ["on the floor covered with flowers", [
+    "lying and looking at the viewer with a smile",
+    "lying and close the eyes with smile happily",
+    "lying and open the hands"
+  ]],
+  ["in front of a minimalist concrete wall", [
+    "standing with one leg bent slightly, hand resting on the wall, gazing confidently",
+    "leaning against the wall with arms crossed, head tilted back with eyes closed",
+    "sitting on the floor with legs extended, one arm draped casually over a knee"
+  ]],
+  ["in a field of tall, windswept grass", [
+    "standing tall, one hand raised above the head as the wind blows through the hair",
+    "walking slowly, arms outstretched, fingertips brushing against the grass",
+    "kneeling in the grass, head tilted to the side, eyes focused intensely ahead"
+  ]],
+  ["on a staircase", [
+    "sitting on the stairs, legs crossed, leaning forward slightly with a serious expression",
+    "standing on the top step, one foot forward, gazing down with a bold stare",
+    "halfway up the stairs, leaning on the railing, one arm draped casually over the side"
+  ]],
+  ["in a room with large, floor-to-ceiling windows", [
+    "standing close to the window, arms crossed, looking out with a reflective expression",
+    "sitting on the windowsill, one leg bent up, looking down with a soft smile",
+    "leaning against the window, one hand pressed against the glass, gazing outward"
+  ]],
+  ["at a large, ornate doorway", [
+    "standing in front of the doorway, hands resting lightly on the frame, looking ahead",
+    "leaning against one side of the doorway, arms crossed, face turned slightly away",
+    "sitting on the steps in front of the doorway, arms resting on knees, look at the viewer"
+  ]],
+  ["on a rooftop at sunset", [
+    "standing near the edge, arms outstretched as if embracing the sky",
+    "sitting cross-legged, facing the horizon, hands resting casually on knees",
+    "standing with one foot on a ledge, leaning slightly forward with a focused gaze"
+  ]],
+  ["at the entrance of a tunnel with shadows stretching inside", [
+    "standing just inside the tunnel, one hand on the wall, looking out into the light",
+    "walking from the tunnel, arms relaxed at the sides, eyes fixed on the darkness",
+    "leaning against the side of the tunnel entrance, head tilted back, eyes closed"
+  ]],
+  ["in a minimalist room with a single window casting soft light", [
+    "sitting cross-legged on the floor, bathed in the light from the window",
+    "standing in front of the window, one hand raised to touch the glass",
+    "leaning against the window frame, looking down thoughtfully"
+  ]],
+  ["in a narrow alley with high walls", [
+    "walking confidently down the alley, one hand grazing the wall",
+    "standing near the wall, arms crossed, with a soft gaze toward the viewer",
+    "leaning against the wall, hands in pockets, with a relaxed posture"
+  ]],
+  ["on a platform surrounded by geometric shapes", [
+    "standing on the platform, arms by the sides, looking up at the shapes",
+    "sitting at the edge of the platform, legs hanging over, staring off into the distance",
+    "leaning on one of the shapes, with one leg bent slightly, gazing forward"
+  ]],
+  ["in an underground parking garage with harsh lighting", [
+    "standing in the middle of an empty space, arms crossed, looking intensely ahead",
+    "sitting on the hood of a sleek car, leaning slightly forward, a small smirk on the face",
+    "walking between the rows of cars, one hand in a pocket, eyes focused straight ahead"
+  ]],
+  ["in a brightly lit, open atrium with geometric designs", [
+    "standing in the middle of the space, arms stretched wide, gazing up at the ceiling",
+    "leaning against a pillar, one leg bent at the knee, looking casually to the side",
+    "sitting on a minimalist bench, arms resting on the backrest, gazing forward"
+  ]],
+  ["in a clean, white corridor with large glass panels", [
+    "walking confidently through the corridor, head held high, looking forward",
+    "standing near the glass panels, one hand resting on the glass, gazing outside",
+    "leaning casually against the wall, arms crossed, with a relaxed posture"
+  ]],
+  ["in front of a dark backdrop with a single spotlight casting sharp shadows", [
+    "half-turned to the light, one hand gently touching the chin, eyes gazing into the distance",
+    "facing the viewer directly, one hand partially covering the face, fingers spread delicately",
+    "tilting the head slightly, one hand resting on the collarbone, soft light highlighting the face, close-up shot"
+  ]],
+  ["in front of a soft gradient background with dramatic side lighting", [
+    "with one hand gently brushing the hair back, light catching the edge of the face, medium close-up shot",
+    "facing forward, hands framing the face, fingers spread delicately across the cheeks",
+    "head tilted downward, hand resting on the forehead, shadows creating depth across the features"
+  ]],
+  ["against a textured wall with a single beam of light cutting across", [
+    "turning toward the light, hand raised to shield the eyes, with a soft, contemplative expression",
+    "facing the viewer, one hand lightly touching the lips, shadows creating sharp contrast on the face",
+    "gazing off to the side, fingers lightly resting on the neck, the light catching the curve of the jawline"
+  ]],
+  ["in front of a backdrop with geometric light patterns", [
+    "face partially illuminated by angular light, one hand touching the cheek, gaze focused forward",
+    "head turned toward the light, one hand lightly tracing the jawline, shadows accentuating the features",
+    "leaning slightly forward, hands intertwined under the chin, with a subtle smile"
+  ]],
+  ["against a moody backdrop with a soft spotlight creating dramatic shadows", [
+    "looking directly at the viewer, one hand gently cradling the face, eyes intense and focused",
+    "head tilted slightly downward, hand raised to touch the temple, shadows playing across the face, close-up shot",
+    "half-turned to the side, hand resting on the shoulder, light highlighting the cheekbones and hands"
+  ]],
+  ["in the front of a fashionable Morandi style color-blocking background", commonFashionActions],
+  ["in the front of a fashionable Morandi style solid color background", commonFashionActions],
+  ["in the front of a fashionable minimalist, youthful and energetic color matching background", commonFashionActions],
+  ["in the front of a white columns, with long shadows background", commonFashionActions],
+  ["in the front of a black and white stitching background", commonFashionActions],
+  ["in the front of a black and white light and shadow background", commonFashionActions],
+  ["in the front of a minimalist landscape of black and white color block background", commonFashionActions],
+  ["in the front of a abstract composition of overlapping translucent circles in pastel hues background", commonFashionActions],
+  ["in the front of a futuristic grid of perfect cubes and spheres background", commonFashionActions]
+];
+
+const fantasticScenes = [
+  ["on the surface of a mirror-like ocean reflecting a kaleidoscope sky", [
+    "walking on the water's surface, the sky reflecting in their footsteps",
+    "sitting on the water, legs crossed, the reflection distorting beneath",
+    "reaching down to touch the water, causing ripples to turn into colorful patterns"
+  ]],
+  ["in a glowing cave filled with crystals", [
+    "running their hand along a crystal surface",
+    "admiring the light refracting through the crystals",
+    "carefully navigating the uneven cave floor"
   ]],
   ["in an enchanted forest with glowing mushrooms", [
     "bending down to examine a glowing mushroom",
-    "walking through a path lit by glowing mushrooms",
-    "admiring the magical glow of the forest"
-  ]],
-  ["in a mystical cave with glowing runes on the walls", [
-    "tracing the glowing runes with their fingers",
-    "trying to decipher the meaning of the runes",
-    "feeling a sense of awe and mystery"
+    "walks from a path lit by glowing mushrooms"
   ]],
   ["in a dark, abandoned castle", [
     "walking down a dusty hallway",
     "pushing open a creaking door",
     "holding a flickering lantern"
   ]],
-  ["in a magical library filled with levitating books", [
-    "reaching out to touch a levitating book",
-    "walking through rows of floating books",
-    "looking up at the high ceiling"
-  ]],
-  ["in a haunted mansion", [
-    "walking cautiously down a dark hallway",
-    "listening for strange noises",
-    "peering into a shadowy room"
-  ]],
   ["in an ancient temple hidden deep within a jungle", [
     "examining ancient carvings on the walls",
     "brushing dust off a stone statue",
-    "walking through crumbling ruins"
-  ]],
-  ["at a crystal palace in the middle of a frozen lake", [
-    "walking across the frozen lake towards the palace",
-    "admiring the reflections of the palace in the ice",
-    "touching the icy surface of the palace walls"
+    "walks from crumbling ruins"
   ]],
   ["in a forgotten city overgrown with vines", [
     "pushing aside thick vines",
-    "walking through crumbling streets",
-    "examining weathered statues"
-  ]],
-  ["in a dragon's lair filled with treasure", [
-    "picking up a gold coin",
-    "admiring a pile of jewels",
-    "carefully stepping over a sleeping dragon"
+    "walking through crumbling streets"
   ]],
   ["in a labyrinth of mirrors reflecting endless possibilities", [
     "looking into a mirror at their reflection",
     "trying to find their way through the maze",
     "touching the surface of a mirror"
-  ]],
-  ["at a tower in the middle of a mystical forest", [
-    "climbing the winding staircase of the tower",
-    "looking out from the top of the tower",
-    "touching the ancient stones of the tower walls"
   ]],
   ["on a ghostly ship", [
     "walking across the creaking deck",
@@ -1575,26 +1361,19 @@ const specialScenes = [
     "admiring the bright neon lights"
   ]],
   ["in a high-tech laboratory filled with robotic arms", [
-    "watching a robotic arm move",
     "examining a complex piece of equipment",
     "typing on a futuristic keyboard"
   ]],
-  ["in a cyberpunk alleyway filled with neon signs and graffiti", [
-    "looking at the neon signs",
-    "walking through the narrow alleyway",
-    "examining the graffiti on the walls"
-  ]],
   ["on an alien planet with strange plants and floating rocks", [
     "looking at the strange plants",
-    "walking on the uneven surface",
-    "reaching out to touch a floating rock"
+    "walking on the uneven surface"
   ]],
   ["in a utopian city with glass towers and holograms", [
     "looking up at the glass towers",
-    "walking through a pristine park",
+    "walks from a pristine park",
     "interacting with a hologram"
   ]],
-  ["on a spaceship", [
+  ["in a spaceship", [
     "looking out the window at the stars",
     "sitting in the pilot's chair",
     "pushing buttons on a control panel"
@@ -1604,45 +1383,19 @@ const specialScenes = [
     "scavenging for supplies",
     "looking at the ruined buildings"
   ]],
-  ["in a robotic factory with assembly lines and sparks flying", [
-    "watching the robots work",
-    "listening to the sounds of machinery",
-    "avoiding the sparks"
-  ]],
   ["in a virtual reality world with pixelated landscapes", [
     "interacting with the virtual environment",
-    "walking through the pixelated landscape",
+    "walks from the pixelated landscape",
     "wearing a VR headset"
-  ]],
-  ["on a desert planet with two suns and endless dunes", [
-    "shielding their eyes from the two suns",
-    "walking across the hot sand",
-    "looking at the endless dunes"
-  ]],
-  ["at a futuristic marketplace filled with exotic goods", [
-    "looking at the exotic goods",
-    "talking to a vendor",
-    "holding a strange object"
-  ]],
-  ["in a cybernetic forest where trees are intertwined with machines", [
-    "touching a tree trunk intertwined with metal",
-    "walking through the unusual forest",
-    "looking at the glowing lights on the machines"
   ]],
   ["at a neon-lit nightclub in a futuristic metropolis", [
     "dancing to the music",
     "drinking a futuristic cocktail",
     "talking to someone at the bar"
   ]],
-  ["in a colossal spaceship hangar with advanced technology", [
-    "looking at the large spaceships",
-    "walking across the vast hangar floor",
-    "examining a piece of advanced technology"
-  ]],
   ["in a world where everything is made of candy", [
-    "taking a bite out of a candy house",
-    "walking on a candy path",
-    "licking a candy tree"
+    "taking a bite out of a candy",
+    "walking on a candy path"
   ]],
   ["in an underwater kingdom with glowing creatures", [
     "swimming through the underwater kingdom",
@@ -1652,47 +1405,11 @@ const specialScenes = [
   ["in a land where the sky is filled with floating lanterns", [
     "looking up at the floating lanterns",
     "releasing a lantern into the sky",
-    "walking through a field of lanterns"
-  ]],
-  ["in a realm where time flows backward", [
-    "watching events unfold in reverse",
-    "walking backward",
-    "catching a thrown object that returns to the thrower's hand"
-  ]],
-  ["on a desert of glass shards reflecting the stars", [
-    "carefully walking on the glass shards",
-    "admiring the reflections of the stars",
-    "picking up a shard of glass"
-  ]],
-  ["in a forest where the trees are made of light", [
-    "walking through the glowing forest",
-    "touching a tree made of light",
-    "looking up at the branches of light"
-  ]],
-  ["in a circus tent with acrobats performing high above", [
-    "watching the acrobats perform",
-    "clapping and cheering",
-    "eating popcorn"
+    "walks from a field of lanterns"
   ]],
   ["in a magical workshop filled with enchanted objects", [
     "looking at the enchanted objects",
-    "picking up a magical item",
     "mixing potions"
-  ]],
-  ["in an old-fashioned theater with red velvet seats", [
-    "sitting in a red velvet seat",
-    "watching a play on stage",
-    "reading the program"
-  ]],
-  ["on the Yellow Brick Road in *The Wizard of Oz*", [
-    "following the Yellow Brick Road",
-    "skipping down the path",
-    "looking towards the Emerald City"
-  ]],
-  ["in the floating diner in *Inception*", [
-    "sitting at a table in the diner",
-    "watching objects float around",
-    "talking to another character"
   ]],
   ["at the end of the world in *Mad Max: Fury Road*", [
     "driving a vehicle across the wasteland",
@@ -1701,48 +1418,161 @@ const specialScenes = [
   ]],
   ["in the Hogwarts Great Hall in *Harry Potter* series", [
     "sitting at a table in the Great Hall",
-    "looking up at the enchanted ceiling",
     "talking to another student"
   ]],
   ["on the space station in *2001: A Space Odyssey*", [
     "floating in zero gravity",
-    "looking out the window at Earth",
     "operating a control panel"
-  ]],
-  ["in the giant wave in *Interstellar*", [
-    "being tossed around by the wave",
-    "holding onto something for dear life",
-    "looking up at the massive wave"
-  ]],
-  ["at the Casablanca airport scene in *Casablanca*", [
-    "standing on the tarmac",
-    "watching a plane take off",
-    "talking to another character"
-  ]],
-  ["at the iconic dance scene in *Pulp Fiction*", [
-    "dancing with a partner",
-    "snapping their fingers to the music",
-    "drinking a milkshake"
-  ]],
-  ["at the beachfront sunset in *The Graduate*", [
-    "standing on the beach",
-    "watching the sunset",
-    "talking to another character"
   ]],
   ["on the battlefield in *Gladiator*", [
     "fighting with a sword",
-    "riding a horse",
-    "looking at the chaos of battle"
+    "riding a horse"
   ]],
   ["at the grand ball scene in *Beauty and the Beast*", [
     "dancing with a partner",
-    "walking down a grand staircase",
-    "talking to other guests"
+    "walking down a grand staircase"
   ]],
-  ["in the iconic trench warfare in *All Quiet on the Western Front*", [
-    "crouching in a trench",
-    "looking out over no man's land",
-    "holding a rifle"
+  ["in a garden with oversized flowers towering overhead", [
+    "standing beneath a giant flower, reaching up to gently touch its petal",
+    "sitting on a large leaf, legs crossed, gazing up at the towering stems",
+    "walking along a path of vines, brushing aside oversized leaves"
+  ]],
+  ["in a maze made of oversized dominoes", [
+    "standing at the entrance, hands on hips, studying the towering domino walls",
+    "pushing one domino, watching the chain reaction as it starts to fall",
+    "climbing up the side of a leaning domino, reaching for the top"
+  ]],
+  ["atop a giant snail shell spiraling into the horizon", [
+    "sitting near the center of the spiral, looking curiously down into its depths",
+    "walking along the spiral edge, arms stretched out for balance",
+    "lying flat on the shell, arms spread wide, feeling the texture beneath"
+  ]],
+  ["in a field of balloons, each tethered to the ground", [
+    "floating slightly off the ground, holding on to a balloon string with one hand",
+    "sitting on a balloon as if it were a chair, legs swinging playfully",
+    "reaching out to grab a floating balloon, standing on tiptoe"
+  ]],
+  ["on a staircase made of giant piano keys", [
+    "walking up the keys, each step making a sound, arms swinging with each step",
+    "sitting on one of the large keys, tapping on another as if playing a tune",
+    "jumping from key to key, making playful musical sounds with every landing"
+  ]],
+  ["inside a giant bottle floating on a sea", [
+    "sitting cross-legged inside the bottle, looking out through the glass at the ocean",
+    "standing at the edge of the bottle opening, arms spread as if about to dive into the water",
+    "leaning against the bottle's wall, gazing dreamily out at the waves"
+  ]],
+  ["on a giant clock face", [
+    "walking along the clock hand, carefully balancing with arms stretched out",
+    "sitting on the edge of the clock face, legs dangling between the numbers",
+    "standing near the center, watching the hands pass by with a thoughtful expression"
+  ]],
+  ["in a boat made of leaves, floating on a calm pond", [
+    "sitting in the center of the leaf boat, dipping a hand into the water",
+    "lying back in the boat, arms crossed behind the head, floating peacefully",
+    "standing at the tip of the boat, arms stretched out as if sailing on the breeze"
+  ]],
+  ["inside a hollowed-out pumpkin, with windows carved in", [
+    "sitting at one of the windows, looking out thoughtfully at the surroundings",
+    "lying inside the pumpkin, arms behind the head, relaxed in the cozy space",
+    "standing at the opening of the pumpkin, one hand resting on the carved edge"
+  ]],
+  ["on a giant pizza slice", [
+    "sliding down the cheese like a water slide, arms flailing",
+    "sitting on the crust, holding a giant pepperoni like a steering wheel",
+    "trying to balance on the slippery cheese, arms waving to stay upright"
+  ]],
+  ["in a bathtub full of popcorn", [
+    "sitting in the tub, tossing popcorn in the air and catching it with their mouth",
+    "lying in the popcorn",
+    "trying to paddle through the popcorn like it's water, but getting stuck"
+  ]],
+  ["on a giant banana peel", [
+    "slipping and falling dramatically, arms and legs flailing",
+    "sitting on the peel, sliding downhill like a sled, laughing",
+    "trying to stand on the slippery surface, wobbling comically"
+  ]],
+  ["inside a giant sandwich", [
+    "peeking out between two slices of bread, looking surprised",
+    "sitting in the sandwich, holding a tomato slice like an umbrella",
+    "trying to push up the top slice of bread like it's too heavy"
+  ]],
+  ["on a giant stack of pancakes", [
+    "sliding down the syrupy surface, laughing as they go",
+    "sitting on top, holding a fork bigger than them, ready to dig in",
+    "stuck in the syrup, trying to pull their feet free with exaggerated effort"
+  ]],
+  ["in a field of rubber ducks", [
+    "standing among the ducks, holding a giant rubber duck and looking confused",
+    "sitting on a giant duck, paddling through the field like it's water",
+    "pretending to give a serious speech to the rubber ducks, arms raised dramatically"
+  ]],
+  ["inside a giant bowl of spaghetti", [
+    "swinging on a giant spaghetti strand like a vine, Tarzan-style",
+    "sitting in the bowl, twirling a forkful of giant noodles",
+    "getting tangled in the noodles, trying to escape but only getting more wrapped up"
+  ]],
+  ["on a giant seesaw made of breadsticks", [
+    "teetering back and forth, holding onto the breadsticks for dear life",
+    "sitting on one end, launching a friend into the air as they jump",
+    "balancing in the middle, arms out like a tightrope walker"
+  ]],
+  ["in a massive bowl of jelly", [
+    "bouncing up and down like a trampoline, arms flapping for balance",
+    "sinking slowly into the jelly, looking panicked but amused",
+    "lying on top of the jelly, bouncing slightly with every movement"
+  ]],
+  ["on a giant stack of books, teetering precariously", [
+    "trying to balance while standing on the top book, arms waving",
+    "sitting cross-legged on the top book, reading another, completely calm",
+    "sliding down the side of the stack like a makeshift slide, laughing"
+  ]],
+  ["in a swimming pool full of jelly beans", [
+    "swimming through the jelly beans, throwing them in the air joyfully",
+    "sitting in an inner tube, slowly sinking into the jelly beans",
+    "diving into the jelly beans, disappearing beneath the surface"
+  ]],
+  ["on a giant chessboard", [
+    "riding a knight like a horse, pretending to charge into battle",
+    "hiding behind a rook, peeking out cautiously",
+    "standing on top of a queen piece, striking a victory pose"
+  ]],
+  ["in a room filled with oversized feathers", [
+    "trying to walk through the room, getting tickled with every step",
+    "lying in the feathers, laughing uncontrollably as they get tickled",
+    "trying to blow the feathers away, but they keep floating back"
+  ]],
+  ["on a giant cookie", [
+    "sitting at the edge of the cookie, dunking it into a giant cup of milk",
+    "lying on the cookie, pretending to take a nap on the chocolate chips",
+    "holding a giant glass of milk, ready to dip the cookie"
+  ]],
+  ["on a stack of giant waffles", [
+    "sliding down the waffle stack like a playground slide, grinning",
+    "trying to pull their foot out of sticky syrup, looking frustrated"
+  ]],
+  ["inside a giant cereal bowl", [
+    "floating on a piece of cereal like it's a raft, looking around",
+    "splashing around in the milk, having a great time",
+    "trying to swim through the milk, pushing pieces of cereal aside"
+  ]],
+  ["in a field of giant mushrooms", [
+    "sitting on top of a mushroom, feet dangling, looking relaxed",
+    "jumping from mushroom to mushroom like stepping stones",
+    "using a giant mushroom cap as an umbrella in an imaginary rainstorm"
+  ]],
+  ["on a beach with giant ice cream cones", [
+    "trying to lick a giant ice cream",
+    "catching the melting ice cream with their hands, looking panicked"
+  ]],
+  ["on a giant soccer ball rolling down a hill", [
+    "running on top of the ball like a circus act, arms flailing",
+    "sitting on the ball, rolling uncontrollably down the hill, laughing",
+    "hanging onto the ball for dear life, feet dragging along the ground"
+  ]],
+  ["lying in a bathtub full of colorful bubbles", [
+    "drinking a big bucket of milk",
+    "cover chest with hands and laugh at the viewer"
   ]]
 ];
 
@@ -1753,18 +1583,37 @@ function getRandom(array) {
 
 var newStyle = [];
 function styleFilter() {
-  const singleStyle = promptsSourceInput[7][0];
+  const singleStyle = promptsSourceInput[8][0];
   if (singleStyle == 0) {
     for (var x = 0; x < style.length; x++) {
-      if (promptsSourceInput[7][x + 1] == true) {
+      if (promptsSourceInput[8][x + 1] == true) {
         newStyle.push(style[x]);
       }
     }
-    if (promptsSourceInput[7][style.length + 1] == true) {
+    if (promptsSourceInput[8][style.length + 1] == true) {
       newStyle.push(...customStyle);
     }
   } else {
     newStyle.push(style[singleStyle - 1]);
+  }
+}
+
+var newScene = [];
+const selectedScene = promptsSourceInput[7][0];
+function sceneFilter() {
+  switch (selectedScene) {
+    case 0:
+      newScene.push(...dailyScenes, ...fashionScenes, ...fantasticScenes);
+      break;
+    case 1:
+      newScene.push(...dailyScenes);
+      break;
+    case 2:
+      newScene.push(...fashionScenes);
+      break;
+    case 3:
+      newScene.push(...fantasticScenes);
+      break;
   }
 }
 
@@ -1779,66 +1628,121 @@ function generatePrompt() {
     randomLight = "";
   }
 
-  if (rand < 0.8) {
-    const sceneArray = getRandom(dailyScenes);
-    randomScene = sceneArray[0];
-    randomAction = getRandom(sceneArray[1]);
-    if (rand < 0.25) {
-      randomAction = getRandom(commonActions);
-    }
-  } else {
-    const sceneArray = getRandom(specialScenes);
-    randomScene = sceneArray[0];
-    randomAction = getRandom(sceneArray[1]);
-    if (rand > 0.95) {
-      randomAction = getRandom(commonActions);
+  const sceneArray = getRandom(newScene);
+  randomScene = sceneArray[0];
+  randomAction = getRandom(sceneArray[1]);
+  if (Math.random() < 0.15) {
+    switch (selectedScene) {
+      case 0:
+        if (dailyScenes.includes(sceneArray)) {
+          randomAction = getRandom(commonDailyActions);
+        } else if (fashionScenes.includes(sceneArray)) {
+          randomAction = getRandom(commonFashionActions);
+        } else if (fantasticScenes.includes(sceneArray)) {
+          randomAction = getRandom(commonFantasticActions);
+        }
+        break;
+      case 1:
+        randomAction = getRandom(commonDailyActions);
+        break;
+      case 2:
+        randomAction = getRandom(commonFashionActions);
+        break;
+      case 3:
+        randomAction = getRandom(commonFantasticActions);
+        break;
     }
   }
 
   if (rand < 0.1) {
     randomSubject = getRandom(animal);
-    if (creativeMode == 0 || creativeMode == 3) {
-      randomClothes = Math.random() < 0.5 ? getRandom(maleClothes) : getRandom(femaleClothes);
-    } else {
-      randomClothes = "";
+    switch (selectedScene) {
+      case 0:
+        if (dailyScenes.includes(sceneArray)) {
+          randomClothes = "";
+          randomAction = "";
+        } else if (fashionScenes.includes(sceneArray)) {
+          randomClothes = "";
+          randomAction = "";
+        } else if (fantasticScenes.includes(sceneArray)) {
+          randomClothes = Math.random() < 0.5 ? getRandom(maleFantasticClothes) : getRandom(femaleFantasticClothes);
+        }
+        break;
+      case 1:
+        randomClothes = "";
+        randomAction = "";
+        break;
+      case 2:
+        randomClothes = "";
+        randomAction = "";
+        break;
+      case 3:
+        randomClothes = Math.random() < 0.5 ? getRandom(maleFantasticClothes) : getRandom(femaleFantasticClothes);
+        break;
     }
-  } else if (rand < 0.35) {
+  } else if (rand < 0.5) {
     randomSubject = getRandom(male);
-    randomClothes = getRandom(maleClothes);
-    if (Math.random() < 0.4) {
+    switch (selectedScene) {
+      case 0:
+        if (dailyScenes.includes(sceneArray)) {
+          randomClothes = getRandom(maleDailyClothes);
+        } else if (fashionScenes.includes(sceneArray)) {
+          randomClothes = getRandom(maleFashionClothes);
+        } else if (fantasticScenes.includes(sceneArray)) {
+          randomClothes = getRandom(maleFantasticClothes);
+        }
+        break;
+      case 1:
+        randomClothes = getRandom(maleDailyClothes);
+        break;
+      case 2:
+        randomClothes = getRandom(maleFashionClothes);
+        break;
+      case 3:
+        randomClothes = getRandom(maleFantasticClothes);
+        break;
+    }
+    if (Math.random() < 0.3) {
       const name = getRandom(maleName);
       randomSubject += " named \"" + name + "\"";
     }
-  } else if (rand < 0.6) {
+  } else if (rand < 0.9) {
     randomSubject = getRandom(female);
-    randomClothes = getRandom(femaleClothes);
-    if (Math.random() < 0.4) {
+    switch (selectedScene) {
+      case 0:
+        if (dailyScenes.includes(sceneArray)) {
+          randomClothes = getRandom(femaleDailyClothes);
+        } else if (fashionScenes.includes(sceneArray)) {
+          randomClothes = getRandom(femaleFashionClothes);
+        } else if (fantasticScenes.includes(sceneArray)) {
+          randomClothes = getRandom(femaleFantasticClothes);
+        }
+        break;
+      case 1:
+        randomClothes = getRandom(femaleDailyClothes);
+        break;
+      case 2:
+        randomClothes = getRandom(femaleFashionClothes);
+        break;
+      case 3:
+        randomClothes = getRandom(femaleFantasticClothes);
+        break;
+    }
+    if (Math.random() < 0.3) {
       const name = getRandom(femaleName);
       randomSubject += " named \"" + name + "\"";
-    }
-  } else if (rand < 0.85) {
-    randomSubject = getRandom(job);
-    if (Math.random() < 0.5) {
-      randomClothes = getRandom(maleClothes);
-      randomSubject = "a male " + randomSubject;
-      if (Math.random() < 0.4) {
-        const name = getRandom(maleName);
-        randomSubject += " named \"" + name + "\"";
-      }
-    } else {
-      randomClothes = getRandom(femaleClothes);
-      randomSubject = "a female " + randomSubject;
-      if (Math.random() < 0.4) {
-        const name = getRandom(femaleName);
-        randomSubject += " named \"" + name + "\"";
-      }
     }
   } else if (rand < 0.95) {
     randomSubject = getRandom(specialCharacters);
     randomClothes = "";
   } else {
-    randomSubject = getRandom(groupPerson);
-    randomClothes = "";
+    if (Math.random() < 0.5) {
+      randomSubject = getRandom(male) + " with " + getRandom(female) + " together";
+      randomClothes = "";
+    } else {
+      randomSubject = getRandom(groupPerson);
+      randomClothes = "";
+    }
   }
 
   if (creativeMode == 3) {
@@ -1850,6 +1754,10 @@ function generatePrompt() {
       const isMan = words.some(word => man.includes(word));
       const isWoman = words.some(word => woman.includes(word));
 
+      let maleClothes = [];
+      let femaleClothes = [];
+      maleClothes.push(...maleDailyClothes, ...maleFashionClothes, ...maleFantasticClothes);
+      femaleClothes.push(...femaleDailyClothes, ...femaleFashionClothes, ...femaleFantasticClothes);
       if (isMan) {
         randomClothes = getRandom(maleClothes);
       } else if (isWoman) {
@@ -1874,6 +1782,7 @@ function generatePrompt() {
       randomSubject = "";
       randomClothes = "";
       randomAction = "";
+      randomLight = promptsSourceInput[4][3] == true ? randomLight : "";
       randomScene = randomScene.substring(randomScene.indexOf(' ') + 1);
     }
   }
@@ -1890,39 +1799,33 @@ function generatePrompt() {
   var buildPrompt = "";
   switch (creativeMode) {
     case 0:
-      buildPrompt = `${randomStyle}, ${view}, ${randomLight}, ${randomSubject}${w}${randomClothes}, ${randomAction} ${randomScene}.`;
+      buildPrompt = `${randomStyle}, ${view}, ${randomLight}. ${randomSubject}${w}${randomClothes}, ${randomAction} ${randomScene}.`;
       break;
     case 1:
-      buildPrompt = `${randomStyle}, ${view}, ${randomLight}, ${randomSubject}${w}${randomClothes} ${randomScene}.`;
+      buildPrompt = `${randomStyle}, ${view}, ${randomLight}. ${randomSubject}${w}${randomClothes} ${randomScene}.`;
       break;
     case 2:
-      buildPrompt = `${randomStyle}, ${view}, ${randomLight}, someone ${randomAction} ${randomScene}.`;
+      buildPrompt = `${randomStyle}, ${view}, ${randomLight}. Someone ${randomAction} ${randomScene}.`;
       break;
     case 3:
-      buildPrompt = `${randomStyle}, ${view}, ${randomLight}, ${randomSubject}${w}${randomClothes}, ${randomAction} ${randomScene}.`;
+      buildPrompt = `${randomStyle}, ${view}, ${randomLight}. ${randomSubject}${w}${randomClothes}, ${randomAction} ${randomScene}.`;
       break;
-    default:
-      buildPrompt = `${randomStyle}, ${view}, ${randomLight}, ${randomSubject}${w}${randomClothes}, ${randomAction} ${randomScene}.`;
   }
 
   if (promptsSourceInput[5][0].trim() != "") {
     buildPrompt = promptsSourceInput[5][0] + ", " + buildPrompt;
   }
-  return buildPrompt.replace(", ,", ",").replace(", ,", ",").replace(",  .", ".");
+  return buildPrompt.replace(", , .", ".").replace(", ,", ",").replace(". ,", ".").replace(",  .", ".");
 }
 
 if (promptsSourceInput[1][0] == 1) {
   const randomPromptCount = promptsSourceInput[2][0];
   promptsSource = "";
   styleFilter();
+  sceneFilter();
   for (var x = 0; x < randomPromptCount; x++) {
     promptsSource += generatePrompt() + "\n\n";
   }
-}
-
-var buttonText = "Next";
-if (promptsSourceInput[0][0] == 1) {
-  buttonText = "🪄 Generate ";
 }
 
 const workflow = promptsSourceInput[0][0];
@@ -1936,17 +1839,17 @@ var prompts = pipeline.prompts.prompt;
 if (workflow == 0 || workflow == 1) {
   const promptsInput = requestFromUser(
     `Flux Auto Workflow ${version}`,
-    buttonText,
+    "Next",
     function () {
       return [
         this.section(
           "❖  Prompt Setting",
           " •   Support multiple prompts batch generation, a blank line between each prompt.\n •   Use ⬆︎ Shift + ↵ Enter to break line. iPadOS / iOS requires an external keyboard.",
           [
-            this.textField(promptsSource, " Write your prompts here.", true, 420),
-            this.slider(batchCount, this.slider.fractional(0), 1, maxCount, "❖  Batch count of each prompt"),
+            this.textField(promptsSource, " Write your prompts here.", true, 410),
+            this.slider(batchCount, this.slider.fractional(0), 1, maxCount, "❖  Batch count of each prompt")
           ]
-        ),
+        )
       ];
     }
   );
@@ -1956,77 +1859,56 @@ if (workflow == 0 || workflow == 1) {
 const promptsArray = prompts.split('\n\n').filter(prompts => prompts.trim() !== '');
 const promptsCount = promptsArray.length;
 
-function calcShift(h, w) {
-  const step1 = (h * w) / 256;
-  const step2 = (1.15 - 0.5) / (4096 - 256);
-  const step3 = (step1 - 256) * step2;
-  const step4 = step3 + 0.5;
-  const result = Math.exp(step4);
-  return Math.round(result * 100) / 100;
+var start = Number;
+
+var titleInfo = "";
+if (workflow == 0 || workflow == 1) {
+  titleInfo = `   ⎟   Prompts: ${promptsCount}  •  Images: ${batchCount * promptsCount}`;
+} else {
+  titleInfo = `   ⎟   Image Refiner Workflow`;
 }
 
-var start = Number;
-function fluxModel() {
-  var tip = ` •   If you need a more accurate quantization model, please set 'useFlux8bit' to 'false'.`;
-  if (useFlux8bit) {
-    const isDownload = pipeline.areModelsDownloaded(["FLUX.1 [dev] (8-bit)"])
-    if (!isDownload[0]) {
-      tip = ` •   After clicking Generate, FLUX.1 [dev] (8-bit) will be automatically downloaded, which requires about 14GB storage space. If you need a more accurate quantization model, please set 'useFlux8bit' to 'false' at the top of script.`;
-    }
-  }
-  var titleInfo = "";
-  if (workflow == 0) {
-    titleInfo = `   ⎟   Prompts: ${promptsCount}  •  Images: ${batchCount * promptsCount}`;
-  } else {
-    titleInfo = `   ⎟   Image Refine Workflow`;
-  }
-  const userInputs = requestFromUser(
-    `Flux Auto Workflow ${version}${titleInfo}`,
-    generateText,
-    function () {
-      var widgetA;
-      var widgetB;
-      var widgetC;
-      var d;
-      if (workflow == 0) {
-        d = 0;
-        widgetA = this.section(
-          "❖  Performance Mode",
-          ` •   Speed Mode: Use the Dev to Schnell LoRA to provide the fastest speed.\n •   Balance Mode: Use Flux Dev as refiner to balance speed and quality.\n •   Quality Mode: Use high steps to provide the best color and aesthetic style.`,
-          [
-            this.segmented(0, ["🚀  Speed   ", "⚖️  Balance   ", "🏆  Quality   "]),
-          ]
-        );
-        widgetB = this.switch(false, "✡︎   Keep Control");
-        widgetC = this.section(
+var generateText = "";
+if (workflow == 0 || workflow == 1) {
+  generateText = "🪄 Generate ";
+} else if (workflow == 2) {
+  generateText = "🪄 Refine ";
+}
+const modelPresets = ["Custom", "Flux Dev", "Flux Schnell", "Kolors", "Dream Shaper", "SDXL", "SD3 Medium", "SD1"];
+const isFluxDownload = pipeline.areModelsDownloaded(["FLUX.1 [dev] (Exact)", "FLUX.1 [dev]", "FLUX.1 [dev] (8-bit)"]);
+let tip = ` •   When there are multiple Flux models with different precisions, the one with the highest precision is used first. The priority is: FLUX.1 [dev] (Exact) >> FLUX.1 [dev] >> FLUX.1 [dev] (8-bit). If it is not downloaded, FLUX.1 [dev] (8-bit) is used first.`;
+
+if (!isFluxDownload[0] && !isFluxDownload[1] && !isFluxDownload[2]) {
+  titleInfo = `   ⎟   Flux will be downloaded later`;
+  tip = ` •   After clicking Generate, FLUX.1 [dev] (8-bit) will be automatically downloaded, which requires about 14GB storage space. If you need a more accurate quantization model, please download from the model list.`;
+}
+
+const userInputs = requestFromUser(
+  `Flux Auto Workflow ${version}${titleInfo}`,
+  generateText,
+  function () {
+    let widget = [];
+    if (workflow == 0) {
+      widget.push(
+        this.section(
           "❖  Image Size",
           "",
           [
             this.size(configuration.width, configuration.height, 128, 2048),
           ]
-        );
-      } else {
-        d = 1;
-        widgetA = this.section(
-          "❖  Batch Refine",
-          ` •   Select the images that needs to be refined in batches from folder. Support mixed resolution.`,
+        ),
+        this.section(
+          "❖  Performance Mode",
+          ` •   Speed Mode: Use the Dev to Schnell LoRA to provide the fastest speed\n      and reliable results.\n •   Balance Mode: Will improve the texture or fine structure based on Speed Mode,\n      need to run Flux twice.\n •   Quality Mode: Use high steps to get the best detail and structure,\n      but the results won't necessarily be better than other modes.`,
           [
-            this.imageField("     Select The Images", true),
+            this.segmented(0, ["🚀  Speed   ", "⚖️  Balance   ", "🏆  Quality   "]),
           ]
-        );
-        widgetB = this.switch(false, "✡︎   Capture Image Description");
-        widgetC = this.section("", "", []);
-        tip = ` •   After enabling the 'Capture Image Description' function, more perfect prompt can be provided for batch refine, making the refined image closer to the original image, but it will increase the running time and require the download of approximately 1.7GB of model files. PNG images generated by DrawThings do not need to turn on this function.`;
-      }
-
-      return [
-        widgetC,
-        widgetA,
+        ),
         this.section(
           "❖  Detail Optimization",
-          ` •   Standard Mode: helps to add more natural details and textures.\n •   Enhance Mode: will add stronger contrast and the composition will change more.`,
+          ` •   Standard Mode: Helps to add more natural details and textures.\n •   Enhance Mode: Will add stronger contrast and the composition will change more.`,
           [
-            this.segmented(d, ["📷  Standard   ", "📸  Enhance   "]),
+            this.segmented(0, ["📷  Standard   ", "📸  Enhance   "]),
           ]
         ),
         this.section(
@@ -2034,74 +1916,172 @@ function fluxModel() {
           " •   Make sure the LoRA and Control models are compatible with Flux before enabling.",
           [
             this.switch(false, "✡︎   Keep LoRA"),
-            widgetB,
+            this.switch(false, "✡︎   Keep Control"),
+            this.switch(false, "✡︎   Allow Unofficial Flux-Dev"),
           ]
         ),
         this.section(
           "⚠︎  Tip",
           tip,
           []
+        )
+      );
+    } else if (workflow == 1) {
+      const i = modelPresets.indexOf(checkModel());
+      const n = i == 0 ? "Unknown Model ⚠︎" : "Automatically Configured";
+      widget.push(
+        this.section(
+          "❖  Image Size",
+          " •   When the SD1 model is selected, the longest side will be limited to '896'\n      to avoid affecting the performance.",
+          [
+            this.size(configuration.width, configuration.height, 128, 2048)
+          ]
         ),
-      ];
+        this.section(
+          `❖  Model Preset • ${n}`,
+          " •   The appropriate preset will be automatically selected for the model. If the model is not recognized, please select the preset manually.",
+          [
+            this.menu(i, ["Custom", "Flux Dev", "Flux Schnell", "Kolors", "SDXL Turbo / Lightning", "SDXL", "SD3 Medium", "SD1"])
+          ]
+        ),
+        this.section(
+          "❖  Additional Model Settings",
+          " •   Make sure the LoRA and Control models are compatible with custom model before enabling.",
+          [
+            this.switch(false, "✡︎   Keep LoRA"),
+            this.switch(false, "✡︎   Keep Control")
+          ]
+        ),
+        this.section(
+          "⚠︎  Tip",
+          " •   If you want to use accelerate LoRA, or fully customized parameters, you need to set the parameters manually first and selecte the model preset to 'custom'.",
+          []
+        )
+      );
+    } else if (workflow == 2) {
+      widget.push(
+        this.section(
+          "❖  Batch Refine",
+          ` •   Select the images that needs to be refined in batches from folder. Support mixed resolution.`,
+          [
+            this.imageField("     Select The Images", true),
+          ]
+        ),
+        this.section(
+          "❖  Detail Optimization",
+          ` •   Standard Mode: Helps to add more natural details and textures.\n •   Enhance Mode: Will add stronger contrast and the composition will change more.`,
+          [
+            this.segmented(1, ["📷  Standard   ", "📸  Enhance   "]),
+          ]
+        ),
+        this.section(
+          "❖  Additional Model Settings",
+          " •   Make sure the LoRA and Control models are compatible with Flux before enabling.",
+          [
+            this.switch(false, "✡︎   Keep LoRA"),
+            this.switch(false, "✡︎   Capture Image Description"),
+            this.switch(false, "✡︎   Allow Unofficial Flux-Dev"),
+          ]
+        ),
+        this.section(
+          "⚠︎  Tip",
+          ` •   After enabling the 'Capture Image Description' function, more perfect prompt can be provided for batch refine, making the refined image closer to the original image, but it will increase the running time and require the download of approximately 1.7GB of model files. PNG images generated by DrawThings do not need to turn on this function.`,
+          []
+        ),
+      );
     }
-  );
-
-  var userSize = {};
-  if (workflow == 0) {
-    userSize = userInputs[0][0];
-  } else if (workflow == 2) {
-    userSize = {
-      "width": configuration.width,
-      "height": configuration.height
-    }
+    return widget;
   }
-  const size = JSON.parse(JSON.stringify(userSize));
-  var devShift = calcShift(size.height, size.width);
-  const mode = userInputs[1][0];
-  const detail = userInputs[2][0];
-  const keepLora = userInputs[3][0];
-  const keepControl = userInputs[3][1];
-  const capture = userInputs[3][1];
-  const imgFiles = userInputs[1][0];
+);
 
-  var loras = [];
-  if (keepLora) {
-    loras = configuration.loras;
+var userSize = {};
+if (workflow == 0 || workflow == 1) {
+  userSize = userInputs[0][0];
+} else if (workflow == 2) {
+  userSize = {
+    "width": configuration.width,
+    "height": configuration.height
   }
+}
+const size = JSON.parse(JSON.stringify(userSize));
+var devShift = calcShift(size.height, size.width);
+var mode = 0;
+var detail = 0;
+var keepLora = false;
+var keepControl = false;
+var capture = false;
+var imgFiles = [];
+var unofficialFlux = false;
+var enableCustomModelLoRA = false;
+var enableCustomModelControls = false;
+var modelPresetIndex = 0;
+var currentModel = "";
+if (workflow == 0) {
+  mode = userInputs[1][0];
+  detail = userInputs[2][0];
+  keepLora = userInputs[3][0];
+  keepControl = userInputs[3][1];
+  unofficialFlux = userInputs[3][2];
+} else if (workflow == 1) {
+  enableCustomModelLoRA = userInputs[2][0];
+  enableCustomModelControls = userInputs[2][1];
+  modelPresetIndex = userInputs[1][0];
+  currentModel = modelPresets[modelPresetIndex];
+} else if (workflow == 2) {
+  detail = userInputs[1][0];
+  keepLora = userInputs[2][0];
+  keepControl = userInputs[2][1];
+  capture = userInputs[2][1];
+  imgFiles = userInputs[0][0];
+  unofficialFlux = userInputs[2][2];
+}
 
-  var controls = [];
-  if (keepControl) {
-    controls = configuration.controls;
-  }
+var loras = [];
+if (keepLora) {
+  loras = configuration.loras;
+}
 
-  if (useFlux8bit) {
-    const isDownload = pipeline.areModelsDownloaded(["FLUX.1 [dev] (8-bit)", "FLUX.1 [dev] to [schnell] 4-Step"]);
-    if (!isDownload[0]) {
+var controls = [];
+if (keepControl) {
+  controls = configuration.controls;
+}
+
+if (workflow != 1) {
+  if (!unofficialFlux) {
+    const isDownload = pipeline.areModelsDownloaded(["FLUX.1 [dev] (Exact)", "FLUX.1 [dev]", "FLUX.1 [dev] (8-bit)"]);
+    const isFluxF16 = isDownload[0];
+    const isFlux = isDownload[1];
+    const isFlux8bit = isDownload[2];
+    if (isFluxF16) {
+      configuration.model = "flux_1_dev_f16.ckpt";
+    } else if (isFlux) {
+      configuration.model = "flux_1_dev_q8p.ckpt";
+    } else if (isFlux8bit) {
+      configuration.model = "flux_1_dev_q5p.ckpt";
+    } else {
       pipeline.downloadBuiltins(["FLUX.1 [dev] (8-bit)"]);
+      configuration.model = "flux_1_dev_q5p.ckpt";
     }
-    if (!isDownload[1]) {
-      pipeline.downloadBuiltins(["FLUX.1 [dev] to [schnell] 4-Step"]);
-    }
-    configuration.model = "flux_1_dev_q5p.ckpt";
-  } else {
-    const isDownload = pipeline.areModelsDownloaded(["FLUX.1 [dev]", "FLUX.1 [dev] to [schnell] 4-Step"]);
-    if (!isDownload[0]) {
-      pipeline.downloadBuiltins(["FLUX.1 [dev]"]);
-    }
-    if (!isDownload[1]) {
-      pipeline.downloadBuiltins(["FLUX.1 [dev] to [schnell] 4-Step"]);
-    }
-    configuration.model = "flux_1_dev_q8p.ckpt";
   }
 
-  if ((configuration.width != size.width || configuration.height != size.height) && (workflow == 0)) {
-    canvas.clear();
+  const isDownload = pipeline.areModelsDownloaded(["FLUX.1 [dev] to [schnell] 4-Step"]);
+  if (!isDownload[0]) {
+    pipeline.downloadBuiltins(["FLUX.1 [dev] to [schnell] 4-Step"]);
   }
+}
 
-  configuration.width = size.width;
-  configuration.height = size.height;
-  configuration.batchCount = 1;
-  configuration.batchSize = 1;
+if ((configuration.width != size.width || configuration.height != size.height) && (workflow != 2)) {
+  canvas.clear();
+}
+
+configuration.width = size.width;
+configuration.height = size.height;
+configuration.batchCount = 1;
+configuration.batchSize = 1;
+configuration.seed = -1;
+configuration.sharpness = 0;
+
+if (workflow != 1) {
   configuration.clipSkip = 1;
   configuration.resolutionDependentShift = false;
   configuration.speedUpWithGuidanceEmbed = true;
@@ -2109,185 +2089,167 @@ function fluxModel() {
   configuration.hiresFix = false;
   configuration.upscaler = null;
   configuration.refinerModel = null;
-  configuration.seed = -1;
-  start = Date.now();
-
-  if (workflow == 0) {
-    const totalBatches = batchCount * promptsCount;
-    for (var s = 0; s < promptsCount; s++) {
-      for (var i = 0; i < batchCount; i++) {
-        const completedBatches = batchCount * s + i + 1;
-        const eTime = completedBatches > 1 ? estimateTime(start, completedBatches - 1, totalBatches) : ``;
-        var schnellLora = [];
-        if (loras.length > 0) {
-          for (var x = 0; x < loras.length; x++) {
-            const loraName = JSON.parse(JSON.stringify(loras[x]));
-            if (loraName.file == "flux.1__dev__to__schnell__4_step_lora_f16.ckpt") {
-              loras.splice(x, 1);
-              x--;
-            }
-          }
-        }
-        if (mode == 0) {
-          console.log(`🟢 Speed Mode ‣ Running the Flux Dev   ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime}`);
-          schnellLora = loras;
-          schnellLora.push({ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 1.1 });
-          configuration.loras = schnellLora;
-          configuration.controls = controls;
-          configuration.sampler = 15;
-          configuration.strength = 1.0;
-          configuration.shift = 1.0;
-          configuration.steps = 4;
-          if (detail == 0) {
-            configuration.guidanceScale = 3.5;
-          } else {
-            configuration.guidanceScale = 4.5;
-          }
-          pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
-        } else if (mode == 1) {
-          console.log(`🟠 Balance Mode ‣ ❶ Running the Flux Dev    ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime} `);
-          schnellLora = loras;
-          schnellLora.push({ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 1.1 });
-          configuration.loras = schnellLora;
-          configuration.controls = controls;
-          configuration.strength = 1.0;
-          configuration.guidanceScale = 3.5;
-          configuration.sampler = 15;
-          configuration.shift = 1.0;
-          configuration.steps = 4;
-          pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
-          console.log(`🟠 Balance Mode ‣ ❷ Refining the image    ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime} `);
-          if (detail == 0) {
-            configuration.loras = [];
-            configuration.sampler = 15;
-            configuration.shift = devShift;
-            configuration.guidanceScale = 3.0;
-            configuration.strength = 0.35;
-            configuration.steps = 20;
-          } else {
-            configuration.loras = [{ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 0.35 }];
-            configuration.sampler = 10;
-            configuration.shift = 1.0;
-            configuration.guidanceScale = 3.8;
-            configuration.strength = 0.5;
-            configuration.steps = 8;
-          }
-          configuration.controls = [];
-          pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
-        } else if (mode == 2) {
-          console.log(`🔴 Quality Mode ‣ Running the Flux Dev    ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime}`);
-          configuration.controls = controls;
-          configuration.sampler = 15;
-          configuration.strength = 1.0;
-          configuration.shift = devShift;
-          if (detail == 0) {
-            schnellLora = loras;
-            schnellLora.push({ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 0.08 });
-            configuration.loras = schnellLora;
-            configuration.guidanceScale = 3.5;
-            configuration.steps = 15;
-          } else {
-            configuration.loras = loras;
-            configuration.guidanceScale = 3.5;
-            configuration.steps = 20;
-          }
-          pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
-        }
-      }
-    }
-  } else if (workflow == 2) {
-    if (imgFiles.length == 0) {
-      const info = `Refining the image on the canvas`;
-      refine(info, null);
-    } else {
-      for (var i = 0; i < imgFiles.length; i++) {
-        const base64Data = imgFiles[i];
-        const binary = base64ToBinary(base64Data.split(',')[1]);
-        const exif = decodeExif(binary);
-        let srcPrompt = null;
-        if (exif) {
-          srcPrompt = exif.prompt;
-        }
-
-        const imageMetadata = new ImageMetadata(imgFiles[i]);
-        configuration.width = imageMetadata.width;
-        configuration.height = imageMetadata.height;
-        devShift = calcShift(imageMetadata.height, imageMetadata.width);
-        canvas.updateCanvasSize(configuration);
-        canvas.loadImageSrc(imgFiles[i]);
-        const eTime = i > 0 ? estimateTime(start, i, imgFiles.length) : ``;
-        const info = `Refining the images from folder   ⚙︎ Image batch progress ‣ ${i + 1}/${imgFiles.length}${eTime}`;
-        refine(info, srcPrompt);
-      }
-    }
-  }
-
-  function refine(info, srcPrompt) {
-    let p = imgFiles.length == 0 ? promptsArray[0] : "sharp focus, detailed texture, film particles, a high-quality image.";
-    if (srcPrompt) {
-      p = srcPrompt;
-    }
-    if (capture) {
-      console.log(`🟢 Capturing Image Description ‣ Running the MoonDream  ⚠️ Please do not move the canvas and other operations while capturing the image description.`);
-      const answer = canvas.answer("moondream2/20240520", "Describe this image, do not exceed 50 words.")
-      if (answer) {
-        p = answer;
-      }
-    }
-    configuration.controls = [];
-    if (detail == 0) {
-      console.log(`⚪️ Standard Mode ‣ ${info}`);
-      configuration.loras = [];
-      configuration.shift = devShift;
-      configuration.sampler = 15;
-      configuration.guidanceScale = 3.5;
-      configuration.strength = 0.35;
-      configuration.steps = 20;
-    } else {
-      console.log(`⚫️ Enhance Mode ‣ ${info}`);
-      configuration.loras = [{ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 1.0 }];
-      configuration.shift = 1.0;
-      configuration.sampler = 10;
-      configuration.guidanceScale = 1.0;
-      configuration.strength = 0.8;
-      configuration.steps = 5;
-    }
-    pipeline.run({ configuration: configuration, prompt: p });
-  }
+  configuration.faceRestoration = null;
 }
 
-function otherModel() {
-  start = Date.now();
-  const totalBatches = batchCount * promptsCount;
+start = Date.now();
+const totalBatches = batchCount * promptsCount;
+if (workflow == 0) {
   for (var s = 0; s < promptsCount; s++) {
     for (var i = 0; i < batchCount; i++) {
       const completedBatches = batchCount * s + i + 1;
       const eTime = completedBatches > 1 ? estimateTime(start, completedBatches - 1, totalBatches) : ``;
-      console.log(`🟢 Running the ${otherModelName.replace("🧩  ", "")}   ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime}`);
+      var schnellLora = [];
+      if (loras.length > 0) {
+        for (var x = 0; x < loras.length; x++) {
+          const loraName = JSON.parse(JSON.stringify(loras[x]));
+          if (loraName.file == "flux.1__dev__to__schnell__4_step_lora_f16.ckpt") {
+            loras.splice(x, 1);
+            x--;
+          }
+        }
+      }
+      if (mode == 0) {
+        console.log(`🟢 Speed Mode ‣ Running the Flux Dev   ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime}`);
+        schnellLora = loras;
+        schnellLora.push({ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 1.1 });
+        configuration.loras = schnellLora;
+        configuration.controls = controls;
+        configuration.sampler = 15;
+        configuration.strength = 1.0;
+        configuration.shift = 1.0;
+        configuration.steps = 4;
+        if (detail == 0) {
+          configuration.guidanceScale = 3.5;
+        } else {
+          configuration.guidanceScale = 4.5;
+        }
+        pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
+      } else if (mode == 1) {
+        console.log(`🟠 Balance Mode ‣ ❶ Running the Flux Dev    ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime} `);
+        schnellLora = loras;
+        schnellLora.push({ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 1.1 });
+        configuration.loras = schnellLora;
+        configuration.controls = controls;
+        configuration.strength = 1.0;
+        configuration.guidanceScale = 3.5;
+        configuration.sampler = 15;
+        configuration.shift = 1.0;
+        configuration.steps = 4;
+        pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
+        console.log(`🟠 Balance Mode ‣ ❷ Refining the image    ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime} `);
+        if (detail == 0) {
+          configuration.loras = [];
+          configuration.sampler = 15;
+          configuration.shift = devShift;
+          configuration.guidanceScale = 3.0;
+          configuration.strength = 0.35;
+          configuration.steps = 20;
+        } else {
+          configuration.loras = [{ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 0.35 }];
+          configuration.sampler = 10;
+          configuration.shift = 1.0;
+          configuration.guidanceScale = 3.8;
+          configuration.strength = 0.5;
+          configuration.steps = 8;
+        }
+        configuration.controls = [];
+        pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
+      } else if (mode == 2) {
+        console.log(`🔴 Quality Mode ‣ Running the Flux Dev    ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime}`);
+        configuration.controls = controls;
+        configuration.sampler = 15;
+        configuration.strength = 1.0;
+        configuration.shift = devShift;
+        if (detail == 0) {
+          schnellLora = loras;
+          schnellLora.push({ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 0.08 });
+          configuration.loras = schnellLora;
+          configuration.guidanceScale = 3.5;
+          configuration.steps = 15;
+        } else {
+          configuration.loras = loras;
+          configuration.guidanceScale = 3.5;
+          configuration.steps = 20;
+        }
+        pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
+      }
+    }
+  }
+} else if (workflow == 1) {
+  initCustomModel();
+  for (var s = 0; s < promptsCount; s++) {
+    for (var i = 0; i < batchCount; i++) {
+      const completedBatches = batchCount * s + i + 1;
+      const eTime = completedBatches > 1 ? estimateTime(start, completedBatches - 1, totalBatches) : ``;
+      console.log(`🟢 Running the ${currentModel}   ⚙︎ Image batch progress ‣ ${completedBatches}/${totalBatches}${eTime}`);
       pipeline.run({ configuration: configuration, prompt: promptsArray[s] });
+    }
+  }
+} else if (workflow == 2) {
+  if (imgFiles.length == 0) {
+    const info = `Refining the image on the canvas`;
+    refine(info, null);
+  } else {
+    for (var i = 0; i < imgFiles.length; i++) {
+      const base64Data = imgFiles[i];
+      const binary = base64ToBinary(base64Data.split(',')[1]);
+      const exif = decodeExif(binary);
+      let srcPrompt = null;
+      if (exif) {
+        srcPrompt = exif.prompt;
+      }
+
+      const imageMetadata = new ImageMetadata(imgFiles[i]);
+      configuration.width = imageMetadata.width;
+      configuration.height = imageMetadata.height;
+      devShift = calcShift(imageMetadata.height, imageMetadata.width);
+      canvas.updateCanvasSize(configuration);
+      canvas.loadImageSrc(imgFiles[i]);
+      const eTime = i > 0 ? estimateTime(start, i, imgFiles.length) : ``;
+      const info = `Refining the images from folder   ⚙︎ Image batch progress ‣ ${i + 1}/${imgFiles.length}${eTime}`;
+      refine(info, srcPrompt);
     }
   }
 }
 
-var generateText = "🪄 Generate ";
-if (workflow == 0) {
-  fluxModel();
-} else if (workflow == 2) {
-  generateText = "🪄 Refine ";
-  fluxModel();
-} else if (workflow == 1) {
-  initModel();
-  canvas.clear();
-  otherModel();
+function refine(info, srcPrompt) {
+  let p = imgFiles.length == 0 ? promptsArray[0] : "sharp focus, detailed texture, film particles, a high-quality image.";
+  if (srcPrompt) {
+    p = srcPrompt;
+  }
+  if (capture) {
+    console.log(`🟢 Capturing Image Description ‣ Running the MoonDream  ⚠️ Please do not move the canvas and other operations while capturing the image description.`);
+    const answer = canvas.answer("moondream2/20240520", "Describe this image, do not exceed 50 words.")
+    if (answer) {
+      p = answer;
+    }
+  }
+  configuration.controls = [];
+  if (detail == 0) {
+    console.log(`⚪️ Standard Mode ‣ ${info}`);
+    configuration.loras = [];
+    configuration.shift = devShift;
+    configuration.sampler = 15;
+    configuration.guidanceScale = 3.5;
+    configuration.strength = 0.35;
+    configuration.steps = 20;
+  } else {
+    console.log(`⚫️ Enhance Mode ‣ ${info}`);
+    configuration.loras = [{ "file": "flux.1__dev__to__schnell__4_step_lora_f16.ckpt", "weight": 1.0 }];
+    configuration.shift = 1.0;
+    configuration.sampler = 10;
+    configuration.guidanceScale = 1.0;
+    configuration.strength = 0.8;
+    configuration.steps = 5;
+  }
+  pipeline.run({ configuration: configuration, prompt: p });
 }
 
-function initModel() {
+function initCustomModel() {
   const width = configuration.width;
   const height = configuration.height;
-  configuration.seed = -1;
-  configuration.batchCount = 1;
-  configuration.batchSize = 1;
-  if (!enableOtherMoldePreset) {
+  if (modelPresetIndex == 0) {
     return;
   }
   configuration.clipSkip = 1;
@@ -2295,27 +2257,43 @@ function initModel() {
   configuration.hiresFix = false;
   configuration.upscaler = null;
   configuration.refinerModel = null;
-  configuration.resolutionDependentShift = false;
   configuration.shift = 1.0;
   configuration.strength = 1.0;
-  if (!enableOtherMoldelControls) {
+  if (!enableCustomModelControls) {
     configuration.controls = [];
   }
-  if (!enableOtherMoldelLoRA) {
+  if (!enableCustomModelLoRA) {
     configuration.loras = [];
   }
 
-  if (checkModel() == "DreamShaper" || checkModel() == "Kolors" || checkModel() == "SDXL") {
+  if (currentModel == "Dream Shaper" || currentModel == "Kolors" || currentModel == "SDXL") {
     configuration.originalImageHeight = height;
     configuration.originalImageWidth = width;
     configuration.targetImageHeight = height;
     configuration.targetImageWidth = width;
     configuration.negativeOriginalImageHeight = 512;
     configuration.negativeOriginalImageWidth = 512;
+    configuration.cropLeft = 0;
+    configuration.cropTop = 0;
   }
 
-  switch (checkModel()) {
-    case "DreamShaper":
+  switch (currentModel) {
+    case "Flux Dev":
+      configuration.sampler = 15;
+      configuration.guidanceScale = 3.5;
+      configuration.steps = 20;
+      configuration.resolutionDependentShift = false;
+      configuration.speedUpWithGuidanceEmbed = true;
+      configuration.shift = devShift;
+      break;
+    case "Flux Schnell":
+      configuration.sampler = 15;
+      configuration.guidanceScale = 1.0;
+      configuration.steps = 4;
+      configuration.resolutionDependentShift = false;
+      configuration.speedUpWithGuidanceEmbed = true;
+      break;
+    case "Dream Shaper":
       configuration.sampler = 1;
       configuration.guidanceScale = 2.0;
       configuration.steps = 10;
@@ -2334,7 +2312,24 @@ function initModel() {
       configuration.sampler = 15;
       configuration.guidanceScale = 5.0;
       configuration.steps = 20;
-      configuration.shift = calcShift(height, width);
+      configuration.resolutionDependentShift = false;
+      configuration.shift = devShift;
+      break;
+    case "SD1":
+      configuration.sampler = 12;
+      configuration.guidanceScale = 6.0;
+      configuration.steps = 10;
+      const maxSize = 896;
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          configuration.width = maxSize;
+          configuration.height = Math.round(Math.round((height / width) * maxSize) / 64) * 64;
+
+        } else {
+          configuration.height = maxSize;
+          configuration.width = Math.round(Math.round((width / height) * maxSize) / 64) * 64;
+        }
+      }
       break;
     default:
       return;
@@ -2343,11 +2338,14 @@ function initModel() {
 
 function checkModel() {
   const model = configuration.model;
-  if (model.includes("flux_")) {
+  if (model.includes("flux_1_dev")) {
     return "Flux";
   }
+  if (model.includes("flux_1_schnell")) {
+    return "Flux Schnell";
+  }
   if (model.includes("dreamshaper_xl_v2.1_turbo")) {
-    return "DreamShaper";
+    return "Dream Shaper";
   }
   if (model.includes("kwai_kolors")) {
     return "Kolors";
@@ -2358,7 +2356,16 @@ function checkModel() {
   if (model.includes("sd3_medium")) {
     return "SD3 Medium";
   }
-  return null;
+  return "Custom";
+}
+
+function calcShift(h, w) {
+  const step1 = (h * w) / 256;
+  const step2 = (1.15 - 0.5) / (4096 - 256);
+  const step3 = (step1 - 256) * step2;
+  const step4 = step3 + 0.5;
+  const result = Math.exp(step4);
+  return Math.round(result * 100) / 100;
 }
 
 function base64ToBinary(base64) {
